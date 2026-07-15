@@ -1,0 +1,26 @@
+# Generated application output
+NetCheck-Portable/
+NetCheck_Data/
+Recovery/
+.selftest/
+tmp/
+
+# Personal monitoring and cloud settings
+NetCheck_*.csv
+NetCheck_*.html
+NetCheck_*.pdf
+settings.dat
+*.tmp
+
+# Build artifacts and old packages
+*.exe
+*.pdb
+*.zip
+!dist/
+!dist/NetCheckMonitor-Portable.zip
+
+# Windows and editor files
+Thumbs.db
+Desktop.ini
+.vs/
+.vscode/

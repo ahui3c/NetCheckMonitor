@@ -1,0 +1,52 @@
+NetCheckMonitor Network Connection Monitor (Portable Windows Edition)
+===================================================================
+
+Version 0.9.1
+
+Interface language
+- Traditional Chinese Windows display languages use the Traditional Chinese interface.
+- Simplified Chinese and every unsupported language default to English.
+- No manual language switch or download is required.
+
+Basic use
+1. Run NetCheckMonitor.exe.
+2. The default check interval is 60 seconds and can be changed before starting.
+3. Select Start. The program continues in the system tray when minimized.
+4. Select Pause for periods that should not count, then Resume to continue.
+5. A live report can be created or a PDF downloaded without interrupting checks.
+6. Select Stop and Create Report when the test is complete.
+7. Use Exit in the lower-right corner so records are flushed and the final report is created before the program closes.
+
+Reports
+- CSV contains the raw check history.
+- HTML is an offline graphical report.
+- PDF can include all saved data or a selected date range.
+- Reports show the computer name, daily effective monitoring time, estimated outage time, outage percentage, outage events, and a 24-hour timeline.
+- Daily outage percentage = estimated outage time / effective monitoring time x 100%. Paused periods are excluded.
+
+Google Drive backup
+1. Open Google Drive Backup.
+2. Select Sign in to Google Drive and authorize your own account in the system browser.
+3. Set the daily backup time. No Google Cloud project or credential download is required.
+- NetCheckMonitor creates or reuses Drive / Net_Check and uploads a complete PDF and raw CSV.
+- The app requests only drive.file access.
+- Windows DPAPI encrypts the refresh token for the current Windows account.
+- The program must remain running for an on-time backup.
+
+Data protection
+- Every result is immediately force-flushed to disk.
+- A recovery copy is stored in %LOCALAPPDATA%\NetCheck\Recovery.
+- Closing the window during monitoring minimizes it to the system tray.
+- The program prevents automatic Windows system sleep while monitoring, although the display may turn off.
+- Do not unplug a USB drive containing the running program.
+
+Requirements
+- Windows 10 or Windows 11
+- .NET Framework 4.8
+- Microsoft Edge for PDF generation
+- Internet access and a default browser for Google Drive backup
+
+Author
+Liao A-Hui (廖阿輝)
+chehui@gmail.com
+https://ahui3c.com
