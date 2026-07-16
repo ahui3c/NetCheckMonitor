@@ -2,6 +2,8 @@
 
 [繁體中文](README.md) | [English](README_EN.md)
 
+<img src="assets/NetCheckMonitor-icon.png" alt="NetCheckMonitor icon" width="128">
+
 NetCheckMonitor is a free, open-source, ad-free Windows utility that periodically checks whether a computer can reach the public Internet. It records outages over hours or days and creates graphical HTML and PDF reports suitable for troubleshooting home Internet service or documenting connection problems for an ISP.
 
 Current version: **0.9.1**

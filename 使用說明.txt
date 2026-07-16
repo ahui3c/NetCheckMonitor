@@ -1,4 +1,4 @@
-NetCheckMonitor 網路連線監控（Windows 可攜版）
+對外網路連線能力監控程式 NetCheckMonitor（Windows 可攜版）
 ========================================
 
 介面語言
