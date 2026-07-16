@@ -42,7 +42,7 @@ try {
     $englishReport = $reportHtml.Contains("<html lang='en'>") -and $reportHtml.Contains('Daily Outage Statistics') -and $reportHtml.Contains('Outage Events') -and -not $reportHtml.Contains('每日斷線統計')
     $ok = $main.Text -eq 'NetCheckMonitor Network Monitor' -and
         $mainText.Contains('Start') -and $mainText.Contains('Download PDF Report') -and $mainText.Contains('About') -and
-        $about.Text -eq 'About NetCheckMonitor' -and $aboutText.Contains('Version 0.9.1') -and $aboutText.Contains('Scheduled monitoring') -and $aboutText.Contains('廖阿輝') -and
+        $about.Text -eq 'About NetCheckMonitor' -and $aboutText.Contains('Version 0.9.2') -and $aboutText.Contains('Scheduled monitoring') -and $aboutText.Contains('廖阿輝') -and
         $report.Text -eq 'Download NetCheckMonitor PDF Report' -and $reportText.Contains('All Saved Data') -and
         $cloud.Text -eq 'Google Drive Daily Backup' -and $cloudText.Contains('Sign in to Google Drive') -and $englishReport
     if (-not $ok) { throw 'English UI probe failed.' }
