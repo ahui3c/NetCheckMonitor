@@ -16,6 +16,7 @@ settings.dat
 *.exe
 *.pdb
 *.zip
+assets/*-source.png
 !dist/
 !dist/NetCheckMonitor-Portable.zip
 

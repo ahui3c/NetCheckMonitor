@@ -31,7 +31,14 @@ $aboutFormType = $assembly.GetType('NetCheck.AboutForm', $true)
 $aboutForm = [Activator]::CreateInstance($aboutFormType)
 $aboutText = @($aboutForm.Controls | ForEach-Object { $_.Text }) -join "`n"
 $aboutPageContent = $aboutForm.Text -eq '關於 NetCheckMonitor' -and $aboutText.Contains('NetCheckMonitor') -and $aboutText.Contains('版本 0.9.1') -and $aboutText.Contains('可定時監控對外網路連線，紀錄斷線並產生圖文報表，並支援網路硬碟備份，PDF 下載，程式完全免費開源無廣告。') -and $aboutText.Contains('廖阿輝') -and $aboutText.Contains('chehui@gmail.com') -and $aboutText.Contains('https://ahui3c.com')
-$programIdentity = $form.Text -eq 'NetCheckMonitor 網路連線監控' -and $assembly.GetName().Version.ToString() -eq '0.9.1.0'
+$programIdentity = $form.Text -eq '對外網路連線能力監控程式' -and $assembly.GetName().Version.ToString() -eq '0.9.1.0'
+$embeddedIcon = [Drawing.Icon]::ExtractAssociatedIcon((Join-Path $testRoot 'NetCheckMonitor.exe'))
+$iconStream = New-Object IO.MemoryStream
+$defaultIconStream = New-Object IO.MemoryStream
+$embeddedIcon.ToBitmap().Save($iconStream, [Drawing.Imaging.ImageFormat]::Png)
+[Drawing.SystemIcons]::Application.ToBitmap().Save($defaultIconStream, [Drawing.Imaging.ImageFormat]::Png)
+$customIconEmbedded = [Convert]::ToBase64String($iconStream.ToArray()) -ne [Convert]::ToBase64String($defaultIconStream.ToArray()) -and $null -ne $form.Icon
+$iconStream.Dispose(); $defaultIconStream.Dispose(); $embeddedIcon.Dispose()
 $testUrls = $type.GetField('TestUrls', $staticFlags).GetValue($null)
 for ($i = 0; $i -lt $testUrls.Length; $i++) { $testUrls[$i] = 'http://127.0.0.1:9/' }
 
@@ -54,6 +61,7 @@ $csv = Get-ChildItem -LiteralPath $dataDir -Filter '*.csv' | Select-Object -Firs
 $html = Get-ChildItem -LiteralPath $dataDir -Filter '*.html' | Select-Object -First 1
 $rows = Import-Csv -LiteralPath $csv.FullName
 $htmlText = Get-Content -LiteralPath $html.FullName -Raw
+$reportHasChineseProductName = $htmlText.Contains('對外網路連線能力監控報表')
 $backupCsv = Get-ChildItem -LiteralPath $env:NETCHECK_BACKUP_DIR -Filter '*.csv' | Select-Object -First 1
 $dailyPattern = [regex]::Escape((Get-Date).ToString('yyyy/MM/dd')) + "</td><td>[^<]*</td><td class='bad'>[^<]*</td><td class='bad'>([0-9.]+)%"
 $dailyMatch = [regex]::Match($htmlText, $dailyPattern)
@@ -107,6 +115,7 @@ $result = [PSCustomObject]@{
     PauseMarker      = [bool]($rows | Where-Object Status -eq 'PAUSED')
     ResumeMarker     = [bool]($rows | Where-Object Status -eq 'RESUMED')
     ReportHasTimeline = $htmlText.Contains('每日連線時間軸')
+    ReportHasChineseProductName = $reportHasChineseProductName
     ReportHasOutages = $htmlText.Contains('斷線事件')
     ReportMarksPause = $htmlText.Contains('#9aa0a6')
     ReportHasDailyStats = $htmlText.Contains('每日斷線百分比')
@@ -126,6 +135,7 @@ $result = [PSCustomObject]@{
     AboutButtonLayout = $aboutButtonLayout
     AboutPageContent = $aboutPageContent
     ProgramIdentity = $programIdentity
+    CustomIconEmbedded = $customIconEmbedded
     CloudDailyPdf = ($cloudPdf.Count -eq 1) -and (Test-Path $cloudPdf[0]) -and ([Text.Encoding]::ASCII.GetString([IO.File]::ReadAllBytes($cloudPdf[0]), 0, 5) -eq '%PDF-')
     CloudDailyCsv = ($cloudCsv.Count -eq 1) -and (Test-Path $cloudCsv[0]) -and ((Get-Content -LiteralPath $cloudCsv[0] -TotalCount 1) -eq 'Timestamp,Type,Status,LatencyMs,Target,Detail') -and ((Split-Path $cloudCsv[0] -Leaf) -match '^NetCheck_.+-A1B2C3D4_\d{8}_Raw\.csv$')
     CloudStorageProtected = [bool]$cloudStorageProtected
@@ -144,11 +154,11 @@ $result | Format-List
 if (-not $result.CsvCreated -or -not $result.HtmlCreated -or -not $result.LiveHtmlCreated -or -not $result.BackupCsvCreated -or
     -not $result.CloseWasBlocked -or $result.CheckRows -lt 1 -or
     -not $result.PauseMarker -or -not $result.ResumeMarker -or
-    -not $result.ReportHasTimeline -or -not $result.ReportHasOutages -or -not $result.ReportMarksPause -or
+    -not $result.ReportHasTimeline -or -not $result.ReportHasChineseProductName -or -not $result.ReportHasOutages -or -not $result.ReportMarksPause -or
     -not $result.ReportHasDailyStats -or -not $result.ReportHasComputer -or -not $result.ComputerMarker -or -not $result.UniqueFileName -or
     -not $result.DailyOutageCalculated -or -not $result.AllPdfCreated -or -not $result.DatePdfCreated -or -not $result.ClearAllPassed -or
     -not $result.DownloadButtonLabel -or -not $result.ClearButtonLayout -or -not $result.ExitButtonLayout -or -not $result.ExitSaveCompleted -or -not $result.ClearRemovedFromPdfDialog -or
-    -not $result.CloudButtonLayout -or -not $result.AboutButtonLayout -or -not $result.AboutPageContent -or -not $result.ProgramIdentity -or -not $result.CloudDailyPdf -or -not $result.CloudDailyCsv -or -not $result.CloudStorageProtected -or
+    -not $result.CloudButtonLayout -or -not $result.AboutButtonLayout -or -not $result.AboutPageContent -or -not $result.ProgramIdentity -or -not $result.CustomIconEmbedded -or -not $result.CloudDailyPdf -or -not $result.CloudDailyCsv -or -not $result.CloudStorageProtected -or
     -not $result.OAuthBuiltInClient -or -not $result.OAuthLoginOnlyUi -or -not $result.LanguageRouting -or -not $result.EnglishUi) {
     throw 'NetCheck self-test failed.'
 }

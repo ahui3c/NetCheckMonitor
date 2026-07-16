@@ -2,7 +2,9 @@
 
 [繁體中文](README.md) | [English](README_EN.md)
 
-NetCheckMonitor 是免費、開源、無廣告的 Windows 對外網路連線監控工具。它會定時檢查電腦是否能連上外部網路，長時間記錄斷線狀況，並產生圖形化 HTML 與 PDF 報表，適合家用網路障礙報修與連線品質佐證。
+<img src="assets/NetCheckMonitor-icon.png" alt="NetCheckMonitor 圖示" width="128">
+
+NetCheckMonitor（中文名稱：對外網路連線能力監控程式）是免費、開源、無廣告的 Windows 工具。它會定時檢查電腦是否能連上外部網路，長時間記錄斷線狀況，並產生圖形化 HTML 與 PDF 報表，適合家用網路障礙報修與連線品質佐證。
 
 目前版本：**0.9.1**
 

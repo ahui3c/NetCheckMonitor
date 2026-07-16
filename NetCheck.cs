@@ -91,13 +91,14 @@ namespace NetCheck
 
         public MainForm()
         {
-            Text = L.T("NetCheckMonitor 網路連線監控", "NetCheckMonitor Network Monitor");
+            Text = L.T("對外網路連線能力監控程式", "NetCheckMonitor Network Monitor");
+            Icon = LoadApplicationIcon();
             Font = new Font("Microsoft JhengHei UI", 10F);
             ClientSize = new Size(780, 530);
             MinimumSize = new Size(700, 480);
             StartPosition = FormStartPosition.CenterScreen;
 
-            var title = new Label { Text = L.T("網路連線監控", "Network Connection Monitor"), Font = new Font(Font.FontFamily, 18F, FontStyle.Bold), AutoSize = true, Location = new Point(22, 18) };
+            var title = new Label { Text = L.T("對外連線能力監控", "Network Connection Monitor"), Font = new Font(Font.FontFamily, 18F, FontStyle.Bold), AutoSize = true, Location = new Point(22, 18) };
             stateLabel.Text = L.T("尚未開始", "Not started");
             stateLabel.Font = new Font(Font.FontFamily, 16F, FontStyle.Bold);
             stateLabel.ForeColor = Color.DimGray;
@@ -175,8 +176,8 @@ namespace NetCheck
             FormClosing += OnFormClosing;
             Resize += delegate { if (WindowState == FormWindowState.Minimized) HideToTray(); };
 
-            trayIcon.Text = L.T("NetCheckMonitor 網路連線監控", "NetCheckMonitor Network Monitor");
-            trayIcon.Icon = SystemIcons.Application;
+            trayIcon.Text = L.T("對外網路連線能力監控程式", "NetCheckMonitor Network Monitor");
+            trayIcon.Icon = (System.Drawing.Icon)this.Icon.Clone();
             trayIcon.Visible = false;
             trayIcon.DoubleClick += delegate { ShowFromTray(); };
             var trayMenu = new ContextMenuStrip();
@@ -510,8 +511,8 @@ namespace NetCheck
             var dailyStats = BuildDailyStats(snapshot, pauseSnapshot, outages, sessionEnd);
             var sb = new StringBuilder();
             sb.Append("<!doctype html><html lang='" + L.HtmlLanguage + "'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'>");
-            sb.Append("<title>" + H(L.T("NetCheckMonitor 網路監控報表", "NetCheckMonitor Network Monitoring Report")) + "</title><style>body{font-family:'Microsoft JhengHei UI','Segoe UI',sans-serif;background:#f4f6f8;color:#17202a;margin:0}.wrap{max-width:1100px;margin:auto;padding:28px}.card{background:white;border-radius:12px;padding:20px;margin:14px 0;box-shadow:0 2px 10px #00000012}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px}.metric{background:#f7f9fb;border-left:5px solid #2e86c1;padding:14px}.metric b{display:block;font-size:24px;margin-top:7px}.bad{color:#b03a2e}.good{color:#1e8449}table{border-collapse:collapse;width:100%}th,td{text-align:left;padding:9px;border-bottom:1px solid #e5e7e9}svg{width:100%;height:42px;background:#eef1f3;border-radius:5px}.legend span{margin-right:18px}.dot{display:inline-block;width:11px;height:11px;margin-right:5px}.foot{color:#657;margin-top:18px;font-size:13px}@media print{body{background:white}.card{box-shadow:none;border:1px solid #ddd}}</style></head><body><div class='wrap'>");
-            sb.Append("<h1>" + H(L.T("NetCheckMonitor 網路連線監控報表", "NetCheckMonitor Network Monitoring Report")) + "</h1><div class='card grid'>");
+            sb.Append("<title>" + H(L.T("對外網路連線能力監控報表", "NetCheckMonitor Network Monitoring Report")) + "</title><style>body{font-family:'Microsoft JhengHei UI','Segoe UI',sans-serif;background:#f4f6f8;color:#17202a;margin:0}.wrap{max-width:1100px;margin:auto;padding:28px}.card{background:white;border-radius:12px;padding:20px;margin:14px 0;box-shadow:0 2px 10px #00000012}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px}.metric{background:#f7f9fb;border-left:5px solid #2e86c1;padding:14px}.metric b{display:block;font-size:24px;margin-top:7px}.bad{color:#b03a2e}.good{color:#1e8449}table{border-collapse:collapse;width:100%}th,td{text-align:left;padding:9px;border-bottom:1px solid #e5e7e9}svg{width:100%;height:42px;background:#eef1f3;border-radius:5px}.legend span{margin-right:18px}.dot{display:inline-block;width:11px;height:11px;margin-right:5px}.foot{color:#657;margin-top:18px;font-size:13px}@media print{body{background:white}.card{box-shadow:none;border:1px solid #ddd}}</style></head><body><div class='wrap'>");
+            sb.Append("<h1>" + H(L.T("對外網路連線能力監控報表", "NetCheckMonitor Network Monitoring Report")) + "</h1><div class='card grid'>");
             Metric(sb, L.T("對外連線率", "Internet Availability"), availability.ToString("0.00") + "%", availability >= 99 ? "good" : "bad");
             Metric(sb, L.T("有效檢查", "Valid Checks"), snapshot.Count + L.T(" 次", ""), "");
             Metric(sb, L.T("斷線檢查", "Failed Checks"), bad + L.T(" 次", ""), bad == 0 ? "good" : "bad");
@@ -794,6 +795,7 @@ namespace NetCheck
         }
 
         private void UpdateState(string text, Color color) { stateLabel.Text = text; stateLabel.ForeColor = color; }
+        private static Icon LoadApplicationIcon() { try { Icon icon = Icon.ExtractAssociatedIcon(Assembly.GetExecutingAssembly().Location); return icon ?? SystemIcons.Application; } catch { return SystemIcons.Application; } }
         private static void SetAwake(bool awake) { SetThreadExecutionState(awake ? ES_CONTINUOUS | ES_SYSTEM_REQUIRED : ES_CONTINUOUS); }
         private void OpenReport() { if (!String.IsNullOrEmpty(reportPath) && File.Exists(reportPath)) Process.Start(new ProcessStartInfo(reportPath) { UseShellExecute = true }); }
         private void HideToTray() { Hide(); trayIcon.Visible = true; trayIcon.ShowBalloonTip(2000, L.T("NetCheckMonitor 仍在執行", "NetCheckMonitor Is Still Running"), L.T("視窗已縮到系統匣，監控不會中斷。", "The window was minimized to the system tray. Monitoring continues."), ToolTipIcon.Info); }
