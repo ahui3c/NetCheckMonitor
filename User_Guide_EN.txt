@@ -1,7 +1,7 @@
 NetCheckMonitor Network Connection Monitor (Portable Windows Edition)
 ===================================================================
 
-Version 0.9.1
+Version 0.9.2
 
 Interface language
 - Traditional Chinese Windows display languages use the Traditional Chinese interface.
