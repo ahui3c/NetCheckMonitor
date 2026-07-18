@@ -1,7 +1,7 @@
 NetCheckMonitor Network Connection Monitor (Portable Windows Edition)
 ===================================================================
 
-Version 0.9.2
+Version 0.9.5
 
 Interface language
 - Traditional Chinese Windows display languages use the Traditional Chinese interface.
@@ -11,18 +11,34 @@ Interface language
 Basic use
 1. Run NetCheckMonitor.exe.
 2. The default check interval is 60 seconds and can be changed before starting.
-3. Select Start. The program continues in the system tray when minimized.
-4. Select Pause for periods that should not count, then Resume to continue.
-5. A live report can be created or a PDF downloaded without interrupting checks.
-6. Select Stop and Create Report when the test is complete.
-7. Use Exit in the lower-right corner so records are flushed and the final report is created before the program closes.
+3. To use your own websites or IP addresses, open Settings, choose custom targets, and enter one to three targets.
+4. Select Start. The program continues in the system tray when minimized.
+   The first failure triggers a fast retry after 5 seconds; consecutive failures confirm an outage. Prolonged outages use a lower retry frequency, but never a longer interval than the period configured on the main screen.
+   The system tray icon remains visible while monitoring: green means online, red means a confirmed outage, orange means checking, and gray means paused.
+   The main window shows the current adapter, connection type (wired/Wi-Fi/VPN), and Wi-Fi signal percentage. Adapter changes are stored in CSV, HTML, and PDF reports.
+5. Select Pause for periods that should not count, then Resume to continue.
+6. A live report can be created or a PDF downloaded without interrupting checks.
+7. Select Stop and Create Report when the test is complete.
+8. Use Exit in the lower-right corner so records are flushed and the final report is created before the program closes.
+
+Monitoring target settings
+- Built-in mode tries the Microsoft, Google, and Cloudflare public connectivity endpoints in order.
+- Custom mode accepts up to three websites or IP addresses in order; the first success marks the check online.
+- Enter https://example.com/status, example.com, or an IP such as 1.1.1.1. Without a scheme, websites use HTTPS and IPs use HTTP.
+- Only HTTP / HTTPS are accepted. Blank, malformed, duplicate, or credential-containing targets cannot be saved.
+- Settings are stored in %LOCALAPPDATA%\NetCheck\Monitor\settings.json for the current Windows user.
+- Start after Windows sign-in and Start monitoring automatically when the app opens are separate options. Unfinished-session recovery is handled first.
+- Startup checks for an existing NetCheckMonitor instance. A duplicate launch shows the existing window instead of starting another monitoring process.
+- Settings remain available while monitoring. Target changes save the current session and report before monitoring restarts automatically; startup-option-only changes do not interrupt monitoring.
+- Optional advanced layered diagnostics run only after an HTTPS failure and check the adapter, default gateway, DNS, IPv4, IPv6, HTTPS target, and Wi-Fi signal. Toggling this option while monitoring takes effect immediately without restarting the session.
 
 Reports
 - CSV contains the raw check history.
 - HTML is an offline graphical report.
 - PDF can include all saved data or a selected date range.
-- Reports show the computer name, daily effective monitoring time, estimated outage time, outage percentage, outage events, and a 24-hour timeline.
-- Daily outage percentage = estimated outage time / effective monitoring time x 100%. Paused periods are excluded.
+- Reports show daily statistics, longest/average/shortest outages, 95th-percentile and maximum latency, average latency variation, outage events, and a 24-hour timeline.
+- Daily outage percentage = confirmed outage time / effective monitoring time x 100%. Paused, interrupted, and powered-off periods are excluded.
+- Enabling or disabling advanced diagnostics changes only the layered evidence collected after failures. It does not change outage detection or statistics, so availability, outage duration, and percentages remain directly comparable. Reports mark failures recorded without diagnostics as "Advanced diagnostics not performed."
 
 Google Drive backup
 1. Open Google Drive Backup.
@@ -36,9 +52,16 @@ Google Drive backup
 Data protection
 - Every result is immediately force-flushed to disk.
 - A recovery copy is stored in %LOCALAPPDATA%\NetCheck\Recovery.
-- Closing the window during monitoring minimizes it to the system tray.
+- Active state is saved to %LOCALAPPDATA%\NetCheck\Monitor\active-session.json. After a crash or Windows restart, the app asks whether to resume the original CSV.
+- Time when the app was not running is marked and excluded. A normal stop removes the active-session state.
+- The X button or Alt+F4 minimizes the app to the system tray instead of exiting. The first use shows a one-time reminder to exit safely with the lower-right Exit button.
 - The program prevents automatic Windows system sleep while monitoring, although the display may turn off.
 - Do not unplug a USB drive containing the running program.
+
+GitHub and update checks
+- The About page includes the GitHub project link and a Check for Updates button.
+- GitHub Releases is queried once only when the button is selected; there is no background polling.
+- If an update is found, the user decides whether to open the Releases page. The app does not download or install automatically.
 
 Requirements
 - Windows 10 or Windows 11
