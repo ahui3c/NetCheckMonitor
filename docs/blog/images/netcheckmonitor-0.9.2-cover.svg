@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#071b35"/>
+      <stop offset="0.55" stop-color="#0b3155"/>
+      <stop offset="1" stop-color="#0b5863"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="35%" cy="46%" r="45%">
+      <stop offset="0" stop-color="#25d9d0" stop-opacity=".28"/>
+      <stop offset="1" stop-color="#25d9d0" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="18" stdDeviation="24" flood-color="#020c19" flood-opacity=".55"/>
+    </filter>
+    <pattern id="grid" width="64" height="64" patternUnits="userSpaceOnUse">
+      <path d="M64 0H0V64" fill="none" stroke="#8bd8e3" stroke-opacity=".08" stroke-width="1"/>
+    </pattern>
+  </defs>
+  <rect width="1600" height="900" fill="url(#bg)"/>
+  <rect width="1600" height="900" fill="url(#grid)"/>
+  <rect width="1600" height="900" fill="url(#glow)"/>
+  <circle cx="270" cy="420" r="225" fill="#0d3655" stroke="#52e2dd" stroke-opacity=".25" stroke-width="2" filter="url(#shadow)"/>
+  <circle cx="270" cy="420" r="185" fill="#f7fbff"/>
+  <image href="../../../assets/NetCheckMonitor-icon.png" x="105" y="255" width="330" height="330" preserveAspectRatio="xMidYMid meet"/>
+  <path d="M42 640H145l42-58 46 120 62-172 58 110h92l47-76 54 76h126" fill="none" stroke="#3de2d7" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="42" cy="640" r="8" fill="#3de2d7"/>
+  <circle cx="672" cy="640" r="8" fill="#3de2d7"/>
+  <g transform="translate(650 145)">
+    <rect x="0" y="0" width="264" height="52" rx="26" fill="#1fdbc9"/>
+    <text x="132" y="35" text-anchor="middle" font-family="Segoe UI, Microsoft JhengHei, sans-serif" font-size="24" font-weight="700" fill="#052638">WINDOWS 可攜版</text>
+    <text x="0" y="132" font-family="Segoe UI, Microsoft JhengHei, sans-serif" font-size="76" font-weight="800" fill="#ffffff">NetCheckMonitor</text>
+    <text x="0" y="208" font-family="Segoe UI, Microsoft JhengHei, sans-serif" font-size="44" font-weight="700" fill="#bff7f3">對外網路連線能力監控程式</text>
+    <text x="0" y="280" font-family="Segoe UI, Microsoft JhengHei, sans-serif" font-size="31" fill="#d8eaf2">長時間記錄斷線，產生圖文與 PDF 報表</text>
+    <text x="0" y="326" font-family="Segoe UI, Microsoft JhengHei, sans-serif" font-size="31" fill="#d8eaf2">每日統計・Google Drive 備份・中英文介面</text>
+    <g transform="translate(0 392)">
+      <rect width="218" height="68" rx="16" fill="#ffffff" fill-opacity=".1" stroke="#ffffff" stroke-opacity=".22"/>
+      <text x="109" y="44" text-anchor="middle" font-family="Segoe UI, Microsoft JhengHei, sans-serif" font-size="27" font-weight="700" fill="#ffffff">免費開源</text>
+      <rect x="238" width="218" height="68" rx="16" fill="#ffffff" fill-opacity=".1" stroke="#ffffff" stroke-opacity=".22"/>
+      <text x="347" y="44" text-anchor="middle" font-family="Segoe UI, Microsoft JhengHei, sans-serif" font-size="27" font-weight="700" fill="#ffffff">完全無廣告</text>
+      <rect x="476" width="218" height="68" rx="16" fill="#ffffff" fill-opacity=".1" stroke="#ffffff" stroke-opacity=".22"/>
+      <text x="585" y="44" text-anchor="middle" font-family="Segoe UI, Microsoft JhengHei, sans-serif" font-size="27" font-weight="700" fill="#ffffff">免安裝</text>
+    </g>
+    <text x="0" y="548" font-family="Segoe UI, Microsoft JhengHei, sans-serif" font-size="28" fill="#8debe4">VERSION 0.9.2　・　MIT LICENSE</text>
+  </g>
+  <text x="80" y="840" font-family="Segoe UI, Microsoft JhengHei, sans-serif" font-size="24" fill="#acd0dc">github.com/ahui3c/NetCheckMonitor</text>
+  <text x="1520" y="840" text-anchor="end" font-family="Segoe UI, Microsoft JhengHei, sans-serif" font-size="24" fill="#acd0dc">作者：廖阿輝</text>
+</svg>

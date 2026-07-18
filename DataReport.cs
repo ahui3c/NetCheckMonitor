@@ -57,7 +57,7 @@ namespace NetCheck
             exportButton.SetBounds(28, 190, 150, 42);
             closeButton.Text = L.T("關閉", "Close");
             closeButton.SetBounds(420, 190, 135, 42);
-            statusLabel.Text = L.T("PDF 會包含每日斷線時間、斷線百分比與時間軸。", "The PDF includes daily outage time, outage percentage, and timelines.");
+            statusLabel.Text = L.T("PDF 會包含每日斷線統計、網卡／連線類型／Wi-Fi 訊號、延遲指標與時間軸。", "The PDF includes outage statistics, adapter/type/Wi-Fi signal, latency metrics, and timelines.");
             statusLabel.AutoSize = false;
             statusLabel.SetBounds(28, 255, 527, 45);
             statusLabel.ForeColor = Color.DimGray;
@@ -126,9 +126,9 @@ namespace NetCheck
 
     internal static class ArchiveReport
     {
-        private sealed class Record { public DateTime Time; public bool Online; public long Latency; }
+        private sealed class Record { public DateTime Time; public bool Online; public string Status; public long Latency; public string Detail; }
         private sealed class Period { public DateTime Start; public DateTime End; }
-        private sealed class Outage { public DateTime Start; public DateTime End; public int Count; public string Machine; }
+        private sealed class Outage { public DateTime Start; public DateTime End; public int Count; public string Machine; public TimeSpan Duration; }
         private sealed class Session
         {
             public string MachineName = Environment.MachineName;
@@ -136,6 +136,10 @@ namespace NetCheck
             public DateTime Start = DateTime.MaxValue;
             public DateTime End = DateTime.MinValue;
             public bool Stopped;
+            public string AdapterName = "";
+            public string AdapterDescription = "";
+            public string ConnectionType = "Disconnected";
+            public int WifiSignal = -1;
             public readonly List<Record> Records = new List<Record>();
             public readonly List<Period> Pauses = new List<Period>();
             public string SourceFile;
@@ -149,6 +153,8 @@ namespace NetCheck
             public TimeSpan Outage;
             public int Checks;
             public int Offline;
+            public int OutageEvents;
+            public TimeSpan LongestOutage;
             public readonly List<Record> Records = new List<Record>();
             public readonly List<Period> Pauses = new List<Period>();
         }
@@ -301,16 +307,17 @@ namespace NetCheck
                     if (type == "MARKER")
                     {
                         if (status == "COMPUTER") ParseComputer(detail, session);
+                        else if (status == "NETWORK") ParseNetwork(detail, session);
                         else if (status == "STARTED") session.Start = time;
                         else if (status == "STOPPED") { session.End = time; session.Stopped = true; }
-                        else if (status == "PAUSED") { pauseOpen = true; pauseStart = time; }
-                        else if (status == "RESUMED" && pauseOpen) { session.Pauses.Add(new Period { Start = pauseStart, End = time }); pauseOpen = false; }
+                        else if (status == "PAUSED" || status == "INTERRUPTED") { pauseOpen = true; pauseStart = time; }
+                        else if ((status == "RESUMED" || status == "SESSION_RESUMED") && pauseOpen) { session.Pauses.Add(new Period { Start = pauseStart, End = time }); pauseOpen = false; }
                     }
                     else if (type == "CHECK")
                     {
                         long latency;
                         Int64.TryParse(f[3], out latency);
-                        session.Records.Add(new Record { Time = time, Online = status == "ONLINE", Latency = latency });
+                        session.Records.Add(new Record { Time = time, Online = status == "ONLINE", Status = status, Latency = latency, Detail = detail });
                         if (session.Start == DateTime.MaxValue) session.Start = time;
                     }
                 }
@@ -335,13 +342,34 @@ namespace NetCheck
             if (open >= 0 && close > open) session.MachineId = detail.Substring(open + 2, close - open - 2).Trim();
         }
 
+        private static void ParseNetwork(string detail, Session session)
+        {
+            foreach (string part in (detail ?? "").Split(new char[] { ';' }, StringSplitOptions.RemoveEmptyEntries))
+            {
+                int equals = part.IndexOf('=');
+                if (equals <= 0) continue;
+                string key = part.Substring(0, equals), value = part.Substring(equals + 1);
+                if (key == "Adapter") session.AdapterName = DecodeNetworkValue(value);
+                else if (key == "Description") session.AdapterDescription = DecodeNetworkValue(value);
+                else if (key == "Type") session.ConnectionType = value;
+                else if (key == "Signal") { int signal; if (Int32.TryParse(value, out signal)) session.WifiSignal = signal; }
+            }
+        }
+
+        private static string DecodeNetworkValue(string value)
+        {
+            try { return Encoding.UTF8.GetString(Convert.FromBase64String(value)); }
+            catch { return ""; }
+        }
+
         private static string BuildHtml(List<Session> sessions, DateTime start, DateTime endExclusive, bool allDates)
         {
             var daily = new SortedDictionary<string, Daily>();
             var selectedOutages = new List<Outage>();
-            var machines = new SortedDictionary<string, string>();
+            var machines = new SortedDictionary<string, Session>();
             int checks = 0, offline = 0, sourceFiles = 0;
             long latencyTotal = 0; int latencyCount = 0;
+            var latencies = new List<long>();
             TimeSpan effectiveTotal = TimeSpan.Zero, outageTotal = TimeSpan.Zero;
 
             foreach (Session s in sessions)
@@ -349,7 +377,8 @@ namespace NetCheck
                 DateTime aSession = Max(s.Start, start), bSession = Min(s.End, endExclusive);
                 if (bSession <= aSession) continue;
                 sourceFiles++;
-                machines[s.MachineId] = s.MachineName;
+                Session latestMachine;
+                if (!machines.TryGetValue(s.MachineId, out latestMachine) || s.End >= latestMachine.End) machines[s.MachineId] = s;
                 List<Outage> outages = BuildOutages(s);
                 for (DateTime day = aSession.Date; day < bSession; day = day.AddDays(1))
                 {
@@ -362,52 +391,117 @@ namespace NetCheck
                     foreach (Outage o in outages)
                     {
                         DateTime oa = Max(o.Start, a), ob = Min(o.End, b);
-                        if (ob > oa) { TimeSpan lost = Effective(oa, ob, s.Pauses); d.Outage += lost; outageTotal += lost; }
+                        if (ob > oa)
+                        {
+                            TimeSpan lost = Effective(oa, ob, s.Pauses);
+                            d.Outage += lost; outageTotal += lost; d.OutageEvents++;
+                            if (lost > d.LongestOutage) d.LongestOutage = lost;
+                        }
                     }
-                    foreach (Record r in s.Records) if (r.Time >= a && r.Time < b) { d.Records.Add(r); d.Checks++; checks++; if (!r.Online) { d.Offline++; offline++; } else { latencyTotal += r.Latency; latencyCount++; } }
+                    foreach (Record r in s.Records) if (r.Time >= a && r.Time < b)
+                    {
+                        d.Records.Add(r);
+                        string status = String.IsNullOrEmpty(r.Status) ? (r.Online ? "ONLINE" : "OFFLINE") : r.Status;
+                        if (status == "ONLINE") { d.Checks++; checks++; latencyTotal += r.Latency; latencyCount++; latencies.Add(r.Latency); }
+                        else if (status == "OFFLINE") { d.Checks++; checks++; d.Offline++; offline++; }
+                    }
                     foreach (Period p in s.Pauses) { DateTime pa = Max(p.Start, a), pb = Min(p.End, b); if (pb > pa) d.Pauses.Add(new Period { Start = pa, End = pb }); }
                 }
                 foreach (Outage o in outages)
                 {
                     DateTime oa = Max(o.Start, aSession), ob = Min(o.End, bSession);
-                    if (ob > oa) selectedOutages.Add(new Outage { Start = oa, End = ob, Count = o.Count, Machine = s.MachineName + " [" + s.MachineId + "]" });
+                    if (ob > oa) selectedOutages.Add(new Outage { Start = oa, End = ob, Count = o.Count, Machine = s.MachineName + " [" + s.MachineId + "]", Duration = Effective(oa, ob, s.Pauses) });
                 }
             }
             if (sourceFiles == 0) throw new InvalidOperationException(L.T("指定日期範圍內沒有監控資料。", "No monitoring data exists in the selected date range."));
             double timeOutagePercent = effectiveTotal.TotalSeconds <= 0 ? 0 : 100.0 * outageTotal.TotalSeconds / effectiveTotal.TotalSeconds;
             double availability = checks == 0 ? 0 : 100.0 * (checks - offline) / checks;
+            TimeSpan longestOutage = TimeSpan.Zero, shortestOutage = TimeSpan.Zero;
+            foreach (Outage o in selectedOutages)
+            {
+                TimeSpan duration = o.Duration;
+                if (duration > longestOutage) longestOutage = duration;
+                if (shortestOutage == TimeSpan.Zero || duration < shortestOutage) shortestOutage = duration;
+            }
+            TimeSpan averageOutage = selectedOutages.Count == 0 ? TimeSpan.Zero : TimeSpan.FromTicks(outageTotal.Ticks / selectedOutages.Count);
+            long maxLatency = MaxValue(latencies), p95Latency = Percentile95(latencies), jitter = AverageLatencyVariation(latencies);
             var sb = new StringBuilder();
             sb.Append("<!doctype html><html lang='" + L.HtmlLanguage + "'><head><meta charset='utf-8'><title>" + H(L.T("對外網路連線能力監控 PDF 報表", "NetCheckMonitor Network Monitoring PDF Report")) + "</title><style>@page{size:A4 landscape;margin:10mm}*{-webkit-print-color-adjust:exact;print-color-adjust:exact;box-sizing:border-box}body{font-family:'Microsoft JhengHei UI','Segoe UI',sans-serif;color:#17202a;font-size:11px;margin:0}h1{font-size:24px;margin:0 0 5px}h2{font-size:16px;margin:0 0 10px}.sub{color:#59636e;margin-bottom:12px}.card{border:1px solid #dfe4e8;border-radius:7px;padding:12px;margin:0 0 12px;page-break-inside:avoid}.grid{display:grid;grid-template-columns:repeat(6,1fr);gap:7px}.metric{background:#f3f6f8;border-left:4px solid #2e86c1;padding:8px}.metric b{display:block;font-size:17px;margin-top:3px}.bad{color:#b03a2e}.good{color:#1e8449}table{border-collapse:collapse;width:100%;font-size:10px}th,td{padding:6px;border-bottom:1px solid #e5e7e9;text-align:left;vertical-align:middle}th{background:#f3f6f8}tr{page-break-inside:avoid}svg{display:block;width:280px;height:18px;background:#eef1f3}.legend{font-size:9px;color:#657}.foot{font-size:9px;color:#657;margin-top:8px}</style></head><body>");
             sb.Append("<h1>" + H(L.T("對外網路連線能力監控 PDF 報表", "NetCheckMonitor Network Monitoring PDF Report")) + "</h1><div class='sub'>" + H(L.T("資料範圍：", "Date range: ")) + start.ToString("yyyy/MM/dd") + " - " + endExclusive.AddDays(-1).ToString("yyyy/MM/dd") + L.T("｜產生時間：", " | Generated: ") + DateTime.Now.ToString("yyyy/MM/dd HH:mm:ss") + L.T("｜來源檔案：", " | Source files: ") + sourceFiles + "</div>");
             sb.Append("<div class='card grid'>");
             Metric(sb, L.T("電腦數", "Computers"), machines.Count.ToString(), ""); Metric(sb, L.T("有效監控", "Effective Monitoring"), Dur(effectiveTotal), ""); Metric(sb, L.T("估計斷線", "Estimated Outage"), Dur(outageTotal), outageTotal > TimeSpan.Zero ? "bad" : "good"); Metric(sb, L.T("時間斷線率", "Time Outage Rate"), timeOutagePercent.ToString("0.00") + "%", timeOutagePercent > 0 ? "bad" : "good"); Metric(sb, L.T("檢查連線率", "Check Availability"), availability.ToString("0.00") + "%", availability >= 99 ? "good" : "bad"); Metric(sb, L.T("平均延遲", "Average Latency"), (latencyCount == 0 ? 0 : latencyTotal / latencyCount) + " ms", "");
-            sb.Append("</div><div class='card'><h2>" + H(L.T("測試電腦", "Test Computers")) + "</h2><table><tr><th>" + H(L.T("電腦名稱", "Computer Name")) + "</th><th>" + H(L.T("8 碼識別碼", "8-character ID")) + "</th></tr>");
-            foreach (var m in machines) sb.Append("<tr><td>" + H(m.Value) + "</td><td>" + H(m.Key) + "</td></tr>");
-            sb.Append("</table></div><div class='card'><h2>" + H(L.T("每日斷線統計", "Daily Outage Statistics")) + "</h2><div class='legend'>" + H(L.T("綠色＝正常　紅色＝斷線　灰色＝暫停；每日斷線百分比＝估計斷線時間 ÷ 有效監控時間", "Green = online, red = offline, gray = paused; daily outage percentage = estimated outage time / effective monitoring time")) + "</div><table><thead><tr><th>" + H(L.T("電腦", "Computer")) + "</th><th>" + H(L.T("日期", "Date")) + "</th><th>" + H(L.T("有效監控", "Effective Monitoring")) + "</th><th>" + H(L.T("估計斷線", "Estimated Outage")) + "</th><th>" + H(L.T("斷線百分比", "Outage Percentage")) + "</th><th>" + H(L.T("檢查 / 失敗", "Checks / Failures")) + "</th><th>" + H(L.T("24 小時時間軸", "24-hour Timeline")) + "</th></tr></thead><tbody>");
+            sb.Append("</div><div class='card grid'>");
+            Metric(sb, L.T("斷線事件", "Outage Events"), selectedOutages.Count.ToString(), selectedOutages.Count > 0 ? "bad" : "good"); Metric(sb, L.T("最長斷線", "Longest Outage"), Dur(longestOutage), longestOutage > TimeSpan.Zero ? "bad" : "good"); Metric(sb, L.T("平均斷線", "Average Outage"), Dur(averageOutage), averageOutage > TimeSpan.Zero ? "bad" : "good"); Metric(sb, L.T("最短斷線", "Shortest Outage"), Dur(shortestOutage), shortestOutage > TimeSpan.Zero ? "bad" : "good"); Metric(sb, L.T("第 95 百分位延遲", "95th Percentile Latency"), p95Latency + " ms", ""); Metric(sb, L.T("最高延遲／平均變動", "Max / Avg Variation"), maxLatency + " / " + jitter + " ms", "");
+            sb.Append("</div><div class='card'><h2>" + H(L.T("測試電腦與網路介面", "Test Computers and Network Interfaces")) + "</h2><table><tr><th>" + H(L.T("電腦名稱", "Computer Name")) + "</th><th>" + H(L.T("8 碼識別碼", "8-character ID")) + "</th><th>" + H(L.T("目前網卡", "Current Network Adapter")) + "</th><th>" + H(L.T("連線類型", "Connection Type")) + "</th><th>" + H(L.T("Wi-Fi 訊號", "Wi-Fi Signal")) + "</th></tr>");
+            foreach (var m in machines)
+            {
+                Session s = m.Value;
+                var network = new NetworkSnapshot { AdapterName = s.AdapterName, AdapterDescription = s.AdapterDescription, TypeCode = s.ConnectionType, WifiSignal = s.WifiSignal };
+                sb.Append("<tr><td>" + H(s.MachineName) + "</td><td>" + H(m.Key) + "</td><td>" + H(network.AdapterDisplay) + "</td><td>" + H(network.TypeDisplay) + "</td><td>" + H(network.SignalDisplay) + "</td></tr>");
+            }
+            sb.Append("</table></div><div class='card'><h2>" + H(L.T("每日斷線統計", "Daily Outage Statistics")) + "</h2><div class='legend'>" + H(L.T("綠色＝正常　紅色＝確認斷線　橙色＝疑似斷線　灰色＝暫停或程式中斷", "Green = online, red = confirmed outage, orange = suspected outage, gray = paused or interrupted")) + "</div><table><thead><tr><th>" + H(L.T("電腦", "Computer")) + "</th><th>" + H(L.T("日期", "Date")) + "</th><th>" + H(L.T("有效監控", "Effective Monitoring")) + "</th><th>" + H(L.T("估計斷線", "Estimated Outage")) + "</th><th>" + H(L.T("斷線百分比", "Outage Percentage")) + "</th><th>" + H(L.T("事件／最長", "Events / Longest")) + "</th><th>" + H(L.T("檢查／確認失敗", "Checks / Confirmed Failures")) + "</th><th>" + H(L.T("24 小時時間軸", "24-hour Timeline")) + "</th></tr></thead><tbody>");
             foreach (var pair in daily)
             {
                 Daily d = pair.Value; double pct = d.Effective.TotalSeconds <= 0 ? 0 : 100.0 * d.Outage.TotalSeconds / d.Effective.TotalSeconds; string cls = pct > 0 ? "bad" : "good";
-                sb.Append("<tr><td>" + H(d.MachineName + " [" + d.MachineId + "]") + "</td><td>" + d.Day.ToString("yyyy/MM/dd") + "</td><td>" + H(Dur(d.Effective)) + "</td><td class='" + cls + "'>" + H(Dur(d.Outage)) + "</td><td class='" + cls + "'>" + pct.ToString("0.00") + "%</td><td>" + d.Checks + " / " + d.Offline + "</td><td>" + Timeline(d) + "</td></tr>");
+                sb.Append("<tr><td>" + H(d.MachineName + " [" + d.MachineId + "]") + "</td><td>" + d.Day.ToString("yyyy/MM/dd") + "</td><td>" + H(Dur(d.Effective)) + "</td><td class='" + cls + "'>" + H(Dur(d.Outage)) + "</td><td class='" + cls + "'>" + pct.ToString("0.00") + "%</td><td>" + d.OutageEvents + " / " + H(Dur(d.LongestOutage)) + "</td><td>" + d.Checks + " / " + d.Offline + "</td><td>" + Timeline(d) + "</td></tr>");
             }
-            sb.Append("</tbody></table></div><div class='card'><h2>" + H(L.T("斷線事件", "Outage Events")) + "</h2>");
+            sb.Append("</tbody></table></div>");
+            AppendDiagnosticTable(sb, sessions, start, endExclusive);
+            sb.Append("<div class='card'><h2>" + H(L.T("斷線事件", "Outage Events")) + "</h2>");
             if (selectedOutages.Count == 0) sb.Append("<p class='good'>" + H(L.T("選取範圍內沒有偵測到斷線。", "No outage was detected in the selected range.")) + "</p>");
             else
             {
                 sb.Append("<table><tr><th>" + H(L.T("電腦", "Computer")) + "</th><th>" + H(L.T("開始", "Started")) + "</th><th>" + H(L.T("恢復 / 最後偵測", "Recovered / Last Detected")) + "</th><th>" + H(L.T("估計區間", "Estimated Duration")) + "</th><th>" + H(L.T("失敗檢查", "Failed Checks")) + "</th></tr>");
-                foreach (Outage o in selectedOutages) sb.Append("<tr><td>" + H(o.Machine) + "</td><td>" + o.Start.ToString("yyyy/MM/dd HH:mm:ss") + "</td><td>" + o.End.ToString("yyyy/MM/dd HH:mm:ss") + "</td><td>" + H(Dur(o.End - o.Start)) + "</td><td>" + o.Count + "</td></tr>");
+                foreach (Outage o in selectedOutages) sb.Append("<tr><td>" + H(o.Machine) + "</td><td>" + o.Start.ToString("yyyy/MM/dd HH:mm:ss") + "</td><td>" + o.End.ToString("yyyy/MM/dd HH:mm:ss") + "</td><td>" + H(Dur(o.Duration)) + "</td><td>" + o.Count + "</td></tr>");
                 sb.Append("</table>");
             }
-            sb.Append("</div><div class='foot'>" + H(L.T("斷線時間是由失敗檢查到下一次成功檢查的估計區間，精度受檢查間隔影響。暫停區段不列入每日有效監控時間及斷線百分比。", "Outage time is estimated from a failed check to the next successful check; precision depends on the check interval. Paused periods are excluded from daily effective monitoring time and outage percentage.")) + "</div></body></html>");
+            sb.Append("</div><div class='foot'>" + H(L.T("首次失敗會在 5 秒後快速複查，連續失敗才確認斷線。暫停、程式中斷與電腦關機區段不列入每日有效監控時間及斷線百分比。進階診斷的開關不影響斷線判定與統計；關閉期間的失敗會標示為未執行進階診斷。", "The first failure triggers a fast retry after 5 seconds, and only consecutive failures confirm an outage. Paused, interrupted, and powered-off periods are excluded from effective monitoring time and outage percentage. Enabling or disabling advanced diagnostics does not change outage detection or statistics; failures recorded while disabled are marked as not diagnosed.")) + "</div></body></html>");
             return sb.ToString();
+        }
+
+        private static void AppendDiagnosticTable(StringBuilder sb, List<Session> sessions, DateTime start, DateTime endExclusive)
+        {
+            sb.Append("<div class='card'><h2>" + H(L.T("進階分層連線診斷", "Advanced Layered Connectivity Diagnostics")) + "</h2>");
+            bool found = false;
+            foreach (Session session in sessions)
+                foreach (Record record in session.Records)
+                    if (!record.Online && record.Time >= start && record.Time < endExclusive) found = true;
+            if (!found) sb.Append("<p class='good'>" + H(L.T("選取範圍內沒有失敗檢查需要診斷。", "No failed checks in the selected range required diagnostics.")) + "</p>");
+            else
+            {
+                sb.Append("<table><tr><th>" + H(L.T("電腦", "Computer")) + "</th><th>" + H(L.T("時間", "Time")) + "</th><th>" + H(L.T("診斷標示", "Diagnostic Finding")) + "</th><th>" + H(L.T("分層證據", "Layer Evidence")) + "</th></tr>");
+                foreach (Session session in sessions)
+                {
+                    foreach (Record record in session.Records)
+                    {
+                        if (record.Online || record.Time < start || record.Time >= endExclusive) continue;
+                        string finding = AdvancedDiagnosticResult.FindingsFromLog(record.Detail);
+                        if (String.IsNullOrEmpty(finding)) finding = L.T("未執行進階診斷", "Advanced diagnostics not performed");
+                        sb.Append("<tr><td>" + H(session.MachineName + " [" + session.MachineId + "]") + "</td><td>" + record.Time.ToString("yyyy/MM/dd HH:mm:ss") + "</td><td>" + H(finding) + "</td><td>" + H(AdvancedDiagnosticResult.EvidenceFromLog(record.Detail)) + "</td></tr>");
+                    }
+                }
+                sb.Append("</table>");
+            }
+            sb.Append("</div>");
         }
 
         private static List<Outage> BuildOutages(Session s)
         {
-            var list = new List<Outage>(); Outage current = null;
+            var list = new List<Outage>(); Outage current = null; DateTime suspected = DateTime.MinValue;
             foreach (Record r in s.Records)
             {
-                if (!r.Online) { if (current == null) current = new Outage { Start = r.Time, End = r.Time, Count = 0 }; current.End = r.Time; current.Count++; }
-                else if (current != null) { current.End = r.Time; list.Add(current); current = null; }
+                string status = String.IsNullOrEmpty(r.Status) ? (r.Online ? "ONLINE" : "OFFLINE") : r.Status;
+                if (status == "SUSPECTED") { if (suspected == DateTime.MinValue) suspected = r.Time; }
+                else if (status == "OFFLINE")
+                {
+                    if (current == null) current = new Outage { Start = suspected == DateTime.MinValue ? r.Time : suspected, End = r.Time, Count = suspected == DateTime.MinValue ? 0 : 1 };
+                    current.End = r.Time; current.Count++;
+                }
+                else if (status == "ONLINE")
+                {
+                    if (current != null) { current.End = r.Time; list.Add(current); current = null; }
+                    suspected = DateTime.MinValue;
+                }
             }
             if (current != null) { current.End = s.End; list.Add(current); }
             return list;
@@ -416,7 +510,7 @@ namespace NetCheck
         private static string Timeline(Daily d)
         {
             var sb = new StringBuilder("<svg viewBox='0 0 1000 18' preserveAspectRatio='none'>");
-            foreach (Record r in d.Records) { double x = (r.Time - d.Day).TotalSeconds / 86400.0 * 1000.0; sb.Append("<rect x='" + x.ToString("0.0", CultureInfo.InvariantCulture) + "' width='1.6' height='18' fill='" + (r.Online ? "#28a745" : "#dc3545") + "'/>"); }
+            foreach (Record r in d.Records) { double x = (r.Time - d.Day).TotalSeconds / 86400.0 * 1000.0; string status = String.IsNullOrEmpty(r.Status) ? (r.Online ? "ONLINE" : "OFFLINE") : r.Status; string color = status == "ONLINE" ? "#28a745" : (status == "SUSPECTED" ? "#f39c12" : "#dc3545"); sb.Append("<rect x='" + x.ToString("0.0", CultureInfo.InvariantCulture) + "' width='1.6' height='18' fill='" + color + "'/>"); }
             foreach (Period p in d.Pauses) { double x = (p.Start - d.Day).TotalSeconds / 86400.0 * 1000.0, w = Math.Max(1, (p.End - p.Start).TotalSeconds / 86400.0 * 1000.0); sb.Append("<rect x='" + x.ToString("0.0", CultureInfo.InvariantCulture) + "' width='" + w.ToString("0.0", CultureInfo.InvariantCulture) + "' height='18' fill='#9aa0a6'/>"); }
             return sb.Append("</svg>").ToString();
         }
@@ -504,6 +598,9 @@ namespace NetCheck
         private static DateTime Min(DateTime a, DateTime b) { return a < b ? a : b; }
         private static string H(string s) { return WebUtility.HtmlEncode(s ?? ""); }
         private static string Dur(TimeSpan t) { if (L.TraditionalChinese) { if (t.TotalDays >= 1) return ((int)t.TotalDays) + "天 " + t.Hours + "小時 " + t.Minutes + "分"; if (t.TotalHours >= 1) return ((int)t.TotalHours) + "小時 " + t.Minutes + "分"; return ((int)t.TotalMinutes) + "分 " + t.Seconds + "秒"; } if (t.TotalDays >= 1) return ((int)t.TotalDays) + "d " + t.Hours + "h " + t.Minutes + "m"; if (t.TotalHours >= 1) return ((int)t.TotalHours) + "h " + t.Minutes + "m"; return ((int)t.TotalMinutes) + "m " + t.Seconds + "s"; }
+        private static long MaxValue(List<long> values) { long max = 0; foreach (long value in values) if (value > max) max = value; return max; }
+        private static long Percentile95(List<long> values) { if (values.Count == 0) return 0; var sorted = new List<long>(values); sorted.Sort(); return sorted[Math.Max(0, (int)Math.Ceiling(sorted.Count * 0.95) - 1)]; }
+        private static long AverageLatencyVariation(List<long> values) { if (values.Count < 2) return 0; long total = 0; for (int i = 1; i < values.Count; i++) total += Math.Abs(values[i] - values[i - 1]); return total / (values.Count - 1); }
         private static void Metric(StringBuilder sb, string name, string value, string cls) { sb.Append("<div class='metric'><span>" + H(name) + "</span><b class='" + cls + "'>" + H(value) + "</b></div>"); }
         private static string Csv(string value) { return "\"" + (value ?? "").Replace("\"", "\"\"") + "\""; }
         private static string SafeName(string value, int max)

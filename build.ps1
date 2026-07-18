@@ -19,6 +19,10 @@ $refs = @(
 
 $sources = @(
     (Join-Path $root 'Localization.cs'),
+    (Join-Path $root 'NetworkStatus.cs'),
+    (Join-Path $root 'AdvancedDiagnostics.cs'),
+    (Join-Path $root 'MonitorSettings.cs'),
+    (Join-Path $root 'SessionRecovery.cs'),
     (Join-Path $root 'NetCheck.cs'),
     (Join-Path $root 'DataReport.cs'),
     (Join-Path $root 'CloudBackup.cs')

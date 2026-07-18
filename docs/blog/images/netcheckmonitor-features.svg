@@ -1,0 +1,72 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1000" viewBox="0 0 1600 1000">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#eff8fc"/><stop offset="1" stop-color="#e7f5f3"/></linearGradient>
+    <linearGradient id="blue" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#126ac8"/><stop offset="1" stop-color="#18a5a8"/></linearGradient>
+    <filter id="s" x="-20%" y="-20%" width="140%" height="150%"><feDropShadow dx="0" dy="8" stdDeviation="10" flood-color="#173b55" flood-opacity=".13"/></filter>
+  </defs>
+  <rect width="1600" height="1000" fill="url(#bg)"/>
+  <text x="800" y="92" text-anchor="middle" font-family="Segoe UI, Microsoft JhengHei, sans-serif" font-size="52" font-weight="800" fill="#102d47">NetCheckMonitor 功能總覽</text>
+  <text x="800" y="140" text-anchor="middle" font-family="Segoe UI, Microsoft JhengHei, sans-serif" font-size="25" fill="#557184">從長時間檢測、資料保護到 PDF 與雲端備份，一套工具完整處理</text>
+
+  <g transform="translate(90 205)" filter="url(#s)">
+    <rect width="440" height="300" rx="26" fill="#fff"/>
+    <circle cx="72" cy="72" r="38" fill="#e4f1ff"/><path d="M72 50v24l18 10" fill="none" stroke="#1478d4" stroke-width="7" stroke-linecap="round"/><circle cx="72" cy="72" r="29" fill="none" stroke="#1478d4" stroke-width="5"/>
+    <text x="128" y="70" font-family="Segoe UI, Microsoft JhengHei, sans-serif" font-size="30" font-weight="800" fill="#17374e">定時連線檢查</text>
+    <text x="128" y="106" font-family="Segoe UI, Microsoft JhengHei, sans-serif" font-size="20" fill="#5d7484">預設每 60 秒，可自行調整</text>
+    <text x="42" y="172" font-family="Segoe UI, Microsoft JhengHei, sans-serif" font-size="23" fill="#334f62">實際測試對外網路連線能力，</text>
+    <text x="42" y="210" font-family="Segoe UI, Microsoft JhengHei, sans-serif" font-size="23" fill="#334f62">記錄時間、狀態、延遲與目標。</text>
+    <rect x="42" y="244" width="150" height="34" rx="17" fill="#e7f4ff"/><text x="117" y="268" text-anchor="middle" font-family="Segoe UI, Microsoft JhengHei, sans-serif" font-size="18" font-weight="700" fill="#1478d4">低資源占用</text>
+  </g>
+
+  <g transform="translate(580 205)" filter="url(#s)">
+    <rect width="440" height="300" rx="26" fill="#fff"/>
+    <circle cx="72" cy="72" r="38" fill="#e5faf6"/><path d="M72 43l27 12v20c0 22-13 36-27 44-14-8-27-22-27-44V55z" fill="none" stroke="#0a9c8c" stroke-width="6"/><path d="M59 76l9 9 18-22" fill="none" stroke="#0a9c8c" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+    <text x="128" y="70" font-family="Segoe UI, Microsoft JhengHei, sans-serif" font-size="30" font-weight="800" fill="#17374e">長時間資料保護</text>
+    <text x="128" y="106" font-family="Segoe UI, Microsoft JhengHei, sans-serif" font-size="20" fill="#5d7484">適合一天到數天持續監控</text>
+    <text x="42" y="172" font-family="Segoe UI, Microsoft JhengHei, sans-serif" font-size="23" fill="#334f62">監控時避免電腦休眠，檢查結果</text>
+    <text x="42" y="210" font-family="Segoe UI, Microsoft JhengHei, sans-serif" font-size="23" fill="#334f62">即時安全寫入並加入關閉確認。</text>
+    <rect x="42" y="244" width="170" height="34" rx="17" fill="#e5faf6"/><text x="127" y="268" text-anchor="middle" font-family="Segoe UI, Microsoft JhengHei, sans-serif" font-size="18" font-weight="700" fill="#0a8b7e">降低資料遺失</text>
+  </g>
+
+  <g transform="translate(1070 205)" filter="url(#s)">
+    <rect width="440" height="300" rx="26" fill="#fff"/>
+    <circle cx="72" cy="72" r="38" fill="#fff1e4"/><rect x="52" y="45" width="14" height="54" rx="4" fill="#ee8b25"/><rect x="78" y="45" width="14" height="54" rx="4" fill="#ee8b25"/>
+    <text x="128" y="70" font-family="Segoe UI, Microsoft JhengHei, sans-serif" font-size="30" font-weight="800" fill="#17374e">暫停不納入統計</text>
+    <text x="128" y="106" font-family="Segoe UI, Microsoft JhengHei, sans-serif" font-size="20" fill="#5d7484">人為操作不會被算成斷線</text>
+    <text x="42" y="172" font-family="Segoe UI, Microsoft JhengHei, sans-serif" font-size="23" fill="#334f62">重開路由器或移動電腦時暫停，</text>
+    <text x="42" y="210" font-family="Segoe UI, Microsoft JhengHei, sans-serif" font-size="23" fill="#334f62">紀錄會標示但排除百分比計算。</text>
+    <rect x="42" y="244" width="170" height="34" rx="17" fill="#fff1e4"/><text x="127" y="268" text-anchor="middle" font-family="Segoe UI, Microsoft JhengHei, sans-serif" font-size="18" font-weight="700" fill="#d77113">統計更準確</text>
+  </g>
+
+  <g transform="translate(90 555)" filter="url(#s)">
+    <rect width="440" height="300" rx="26" fill="#fff"/>
+    <circle cx="72" cy="72" r="38" fill="#f0ebff"/><path d="M48 92V50h48v42z" fill="none" stroke="#7958c8" stroke-width="5"/><path d="M57 80l10-12 9 8 12-17" fill="none" stroke="#7958c8" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+    <text x="128" y="70" font-family="Segoe UI, Microsoft JhengHei, sans-serif" font-size="30" font-weight="800" fill="#17374e">圖形化報表</text>
+    <text x="128" y="106" font-family="Segoe UI, Microsoft JhengHei, sans-serif" font-size="20" fill="#5d7484">監控不中斷也能即時產生</text>
+    <text x="42" y="172" font-family="Segoe UI, Microsoft JhengHei, sans-serif" font-size="23" fill="#334f62">時間軸、斷線事件、每日斷線時間</text>
+    <text x="42" y="210" font-family="Segoe UI, Microsoft JhengHei, sans-serif" font-size="23" fill="#334f62">與每日斷線百分比一目了然。</text>
+    <rect x="42" y="244" width="184" height="34" rx="17" fill="#f0ebff"/><text x="134" y="268" text-anchor="middle" font-family="Segoe UI, Microsoft JhengHei, sans-serif" font-size="18" font-weight="700" fill="#6847b0">HTML＋CSV</text>
+  </g>
+
+  <g transform="translate(580 555)" filter="url(#s)">
+    <rect width="440" height="300" rx="26" fill="#fff"/>
+    <circle cx="72" cy="72" r="38" fill="#ffe8eb"/><path d="M51 43h32l14 14v48H51z" fill="none" stroke="#d8435b" stroke-width="5"/><path d="M83 43v16h14" fill="none" stroke="#d8435b" stroke-width="5"/><text x="74" y="91" text-anchor="middle" font-family="Segoe UI, sans-serif" font-size="18" font-weight="800" fill="#d8435b">PDF</text>
+    <text x="128" y="70" font-family="Segoe UI, Microsoft JhengHei, sans-serif" font-size="30" font-weight="800" fill="#17374e">PDF 彈性下載</text>
+    <text x="128" y="106" font-family="Segoe UI, Microsoft JhengHei, sans-serif" font-size="20" fill="#5d7484">全部資料或指定日期區間</text>
+    <text x="42" y="172" font-family="Segoe UI, Microsoft JhengHei, sans-serif" font-size="23" fill="#334f62">適合寄送客服、列印保存，或附在</text>
+    <text x="42" y="210" font-family="Segoe UI, Microsoft JhengHei, sans-serif" font-size="23" fill="#334f62">網路叫修案件中作為客觀佐證。</text>
+    <rect x="42" y="244" width="184" height="34" rx="17" fill="#ffe8eb"/><text x="134" y="268" text-anchor="middle" font-family="Segoe UI, Microsoft JhengHei, sans-serif" font-size="18" font-weight="700" fill="#c33149">完整或日期範圍</text>
+  </g>
+
+  <g transform="translate(1070 555)" filter="url(#s)">
+    <rect width="440" height="300" rx="26" fill="#fff"/>
+    <circle cx="72" cy="72" r="38" fill="#e6f1ff"/><path d="M48 83c0-10 8-18 18-18 3-12 13-19 25-17 12 2 19 12 18 24 8 2 13 8 13 16 0 10-8 18-18 18H62c-8 0-14-5-14-13z" transform="translate(-8 -8) scale(.92)" fill="none" stroke="#3779ca" stroke-width="6"/>
+    <text x="128" y="70" font-family="Segoe UI, Microsoft JhengHei, sans-serif" font-size="30" font-weight="800" fill="#17374e">Google Drive 備份</text>
+    <text x="128" y="106" font-family="Segoe UI, Microsoft JhengHei, sans-serif" font-size="20" fill="#5d7484">登入自己的帳號即可使用</text>
+    <text x="42" y="172" font-family="Segoe UI, Microsoft JhengHei, sans-serif" font-size="23" fill="#334f62">每日定時上傳完整 PDF 與 CSV 到</text>
+    <text x="42" y="210" font-family="Segoe UI, Microsoft JhengHei, sans-serif" font-size="23" fill="#334f62">Drive / Net_Check，免下載憑證。</text>
+    <rect x="42" y="244" width="196" height="34" rx="17" fill="#e6f1ff"/><text x="140" y="268" text-anchor="middle" font-family="Segoe UI, Microsoft JhengHei, sans-serif" font-size="18" font-weight="700" fill="#2c68b4">每日自動＋立即備份</text>
+  </g>
+  <rect x="250" y="913" width="1100" height="54" rx="27" fill="url(#blue)"/>
+  <text x="800" y="949" text-anchor="middle" font-family="Segoe UI, Microsoft JhengHei, sans-serif" font-size="23" font-weight="700" fill="#fff">繁體中文／英文自動切換　・　Windows 可攜版免安裝　・　免費開源無廣告</text>
+</svg>
