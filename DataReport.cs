@@ -198,6 +198,16 @@ namespace NetCheck
 
         public static string WriteCumulativeHtml(string outputPath, bool live)
         {
+            return WriteCumulativeHtmlCore(outputPath, live, false);
+        }
+
+        public static string ForceRebuildDailyDetailReports(string outputPath, bool live)
+        {
+            return WriteCumulativeHtmlCore(outputPath, live, true);
+        }
+
+        private static string WriteCumulativeHtmlCore(string outputPath, bool live, bool forceDailyDetails)
+        {
             List<Session> sessions = LoadSessions();
             if (!HasStatisticalData(sessions))
             {
@@ -209,15 +219,67 @@ namespace NetCheck
             }
             DateTime start = MinStart(sessions).Date;
             DateTime endExclusive = MaxEnd(sessions).Date.AddDays(1);
-            string html = BuildHtml(sessions, start, endExclusive, true);
-            string screenStyles = "<style>body{font-size:16px;line-height:1.5;padding:24px}h1{font-size:28px}h2{font-size:20px}table{font-size:16px}th,td{padding:9px}.metric b{font-size:24px}.legend,.foot{font-size:13px}</style>";
-            html = html.Replace("</head>", screenStyles + "</head>");
+            Dictionary<string, string> dailyLinks = PrepareDailyDetailReports(outputPath, sessions, start, endExclusive, forceDailyDetails);
+            string html = BuildHtmlCore(sessions, start, endExclusive, true, false, dailyLinks);
+            html = AddScreenStyles(html);
             string note = live
                 ? L.T("這是監控進行中的累積即時快照；所有尚未清除的歷史 CSV 都已納入，產生報表不會中斷檢查。", "This is a cumulative live snapshot. All historical CSV files that have not been cleared are included, and creating the report does not interrupt monitoring.")
                 : L.T("這是所有尚未清除之監控資料的累積報表。", "This is a cumulative report of all monitoring data that has not been cleared.");
             html = html.Replace("</body>", "<div class='foot'>" + H(note) + "</div></body>");
             File.WriteAllText(outputPath, html, new UTF8Encoding(true));
             return outputPath;
+        }
+
+        private static Dictionary<string, string> PrepareDailyDetailReports(string outputPath, List<Session> sessions, DateTime start, DateTime endExclusive, bool force)
+        {
+            var days = new SortedDictionary<string, DateTime>();
+            foreach (Session session in sessions)
+                foreach (Record record in session.Records)
+                    if (record.Time >= start && record.Time < endExclusive) days[record.Time.ToString("yyyyMMdd")] = record.Time.Date;
+            string directory = Path.GetDirectoryName(outputPath);
+            if (String.IsNullOrEmpty(directory)) directory = Directory.GetCurrentDirectory();
+            Directory.CreateDirectory(directory);
+            var links = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            foreach (KeyValuePair<string, DateTime> item in days)
+            {
+                string fileName = DailyDetailFileName(outputPath, item.Value);
+                string path = Path.Combine(directory, fileName);
+                bool completedDay = item.Value.Date < DateTime.Today;
+                if (force || !completedDay || !File.Exists(path))
+                {
+                    string dailyHtml = BuildHtmlCore(sessions, item.Value.Date, item.Value.Date.AddDays(1), false, true, null);
+                    dailyHtml = AddScreenStyles(dailyHtml);
+                    WriteHtmlFile(path, dailyHtml);
+                }
+                if (File.Exists(path)) links[item.Key] = fileName;
+            }
+            return links;
+        }
+
+        private static string DailyDetailFileName(string outputPath, DateTime day)
+        {
+            string stem = Path.GetFileNameWithoutExtension(outputPath);
+            string[] suffixes = new string[] { "_Cumulative_Live", "_Cumulative_Report" };
+            foreach (string suffix in suffixes)
+                if (stem.EndsWith(suffix, StringComparison.OrdinalIgnoreCase)) { stem = stem.Substring(0, stem.Length - suffix.Length); break; }
+            return stem + "_Daily_Detail_" + day.ToString("yyyyMMdd") + ".html";
+        }
+
+        private static string AddScreenStyles(string html)
+        {
+            string screenStyles = "<style>body{font-size:16px;line-height:1.5;padding:24px}h1{font-size:28px}h2{font-size:20px}table{font-size:16px}th,td{padding:9px}.metric b{font-size:24px}.legend,.foot{font-size:13px}</style>";
+            return html.Replace("</head>", screenStyles + "</head>");
+        }
+
+        private static void WriteHtmlFile(string path, string html)
+        {
+            string temp = path + ".tmp-" + Guid.NewGuid().ToString("N");
+            try
+            {
+                File.WriteAllText(temp, html, new UTF8Encoding(true));
+                File.Copy(temp, path, true);
+            }
+            finally { try { if (File.Exists(temp)) File.Delete(temp); } catch { } }
         }
 
         public static string FindLatestCumulativeHtml(string machineId)
@@ -254,13 +316,25 @@ namespace NetCheck
             }
             if (existing != null)
             {
-                try { if (File.GetLastWriteTime(existing) >= newestCsvWrite) return existing; }
+                try { if (File.GetLastWriteTime(existing) >= newestCsvWrite && HasDailyDetailLinkMarker(existing)) return existing; }
                 catch { }
             }
             if (newestSession == null || String.IsNullOrEmpty(newestSession.SourceFile)) return existing;
             string directory = Path.GetDirectoryName(newestSession.SourceFile);
             string name = "NetCheck_" + SafeName(machineName, 16) + "-" + (machineId ?? "LEGACY") + "_Cumulative_Report.html";
             return WriteCumulativeHtml(Path.Combine(directory, name), false);
+        }
+
+        private static bool HasDailyDetailLinkMarker(string path)
+        {
+            const string marker = "NETCHECK_DAILY_DETAIL_LINKS_V1";
+            char[] buffer = new char[8192];
+            using (var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
+            using (var reader = new StreamReader(stream, Encoding.UTF8, true))
+            {
+                int count = reader.Read(buffer, 0, buffer.Length);
+                return count > 0 && new string(buffer, 0, count).IndexOf(marker, StringComparison.Ordinal) >= 0;
+            }
         }
 
         public static string[] ExportDailyArtifacts(string outputDirectory, string machineName, string machineId, DateTime day)
@@ -436,6 +510,11 @@ namespace NetCheck
 
         private static string BuildHtml(List<Session> sessions, DateTime start, DateTime endExclusive, bool allDates)
         {
+            return BuildHtmlCore(sessions, start, endExclusive, allDates, true, null);
+        }
+
+        private static string BuildHtmlCore(List<Session> sessions, DateTime start, DateTime endExclusive, bool allDates, bool includeDetailedRecords, Dictionary<string, string> dailyLinks)
+        {
             var daily = new SortedDictionary<string, Daily>();
             var selectedOutages = new List<Outage>();
             var machines = new SortedDictionary<string, Session>();
@@ -511,6 +590,7 @@ namespace NetCheck
             });
             var sb = new StringBuilder();
             sb.Append("<!doctype html><html lang='" + L.HtmlLanguage + "'><head><meta charset='utf-8'><title>" + H(L.T("對外網路連線能力累積監控報表", "NetCheckMonitor Cumulative Network Monitoring Report")) + "</title><style>@page{size:A4 landscape;margin:10mm}*{-webkit-print-color-adjust:exact;print-color-adjust:exact;box-sizing:border-box}body{font-family:'Microsoft JhengHei UI','Segoe UI',sans-serif;color:#17202a;font-size:11px;margin:0}h1{font-size:24px;margin:0 0 5px}h2{font-size:16px;margin:0 0 10px}.sub{color:#59636e;margin-bottom:12px}.card{border:1px solid #dfe4e8;border-radius:7px;padding:12px;margin:0 0 12px;page-break-inside:avoid}.grid{display:grid;grid-template-columns:repeat(6,1fr);gap:7px}.metric{background:#f3f6f8;border-left:4px solid #2e86c1;padding:8px}.metric b{display:block;font-size:17px;margin-top:3px}.bad{color:#b03a2e}.good{color:#1e8449}table{border-collapse:collapse;width:100%;font-size:10px}th,td{padding:6px;border-bottom:1px solid #e5e7e9;text-align:left;vertical-align:middle}th{background:#f3f6f8}tr{page-break-inside:avoid}.timeline-chart{width:100%}.timeline-chart svg{display:block;width:100%;height:22px;background:#eef1f3}.timeline-axis{display:flex;justify-content:space-between;width:100%;font-size:8px;color:#657}.timeline-row td{padding-top:3px;padding-bottom:12px}.timeline-indent{margin-left:42px;margin-right:12px}.timeline-hit{fill:transparent;cursor:help;pointer-events:all}.date-shade-0 td{background:#f5f9ff}.date-shade-1 td{background:#fff9f0}.date-shade-2 td{background:#f3faf5}.date-shade-3 td{background:#fbf5fa}.event-badge{display:inline-block;border-radius:10px;padding:2px 7px;font-weight:bold;white-space:nowrap}.event-outage{background:#fde8e6;color:#a93226}.event-note{background:#f1e6f7;color:#6c3483}.legend{font-size:9px;color:#657}.foot{font-size:9px;color:#657;margin-top:8px}.detail-report{page-break-inside:auto}.detail-day{margin-top:14px}.detail-day h3{font-size:13px;margin:0;padding:7px 9px;background:#eaf2f8;border-left:4px solid #2e86c1}.detail-status{font-weight:bold;white-space:nowrap}.detail-target{word-break:break-all}@media print{.detail-day{page-break-before:always}.detail-day:first-of-type{page-break-before:auto}}</style></head><body>");
+            if (dailyLinks != null) sb.Append("<!--NETCHECK_DAILY_DETAIL_LINKS_V1-->");
             sb.Append("<h1>" + H(L.T("對外網路連線能力累積監控報表", "NetCheckMonitor Cumulative Network Monitoring Report")) + "</h1><div class='sub'>" + H(L.T("資料範圍：", "Date range: ")) + start.ToString("yyyy/MM/dd") + " - " + endExclusive.AddDays(-1).ToString("yyyy/MM/dd") + L.T("｜產生時間：", " | Generated: ") + DateTime.Now.ToString("yyyy/MM/dd HH:mm:ss") + L.T("｜來源檔案：", " | Source files: ") + sourceFiles + "</div>");
             sb.Append("<div class='card grid'>");
             Metric(sb, L.T("電腦數", "Computers"), machines.Count.ToString(), ""); Metric(sb, L.T("有效監控", "Effective Monitoring"), Dur(effectiveTotal), ""); Metric(sb, L.T("估計斷線", "Estimated Outage"), Dur(outageTotal), outageTotal > TimeSpan.Zero ? "bad" : "good"); Metric(sb, L.T("時間斷線率", "Time Outage Rate"), timeOutagePercent.ToString("0.00") + "%", timeOutagePercent > 0 ? "bad" : "good"); Metric(sb, L.T("檢查連線率", "Check Availability"), availability.ToString("0.00") + "%", availability >= 99 ? "good" : "bad"); Metric(sb, L.T("平均延遲", "Average Latency"), (latencyCount == 0 ? 0 : latencyTotal / latencyCount) + " ms", "");
@@ -524,17 +604,21 @@ namespace NetCheck
                 sb.Append("<tr><td>" + H(s.MachineName) + "</td><td>" + H(m.Key) + "</td><td>" + H(network.AdapterDisplay) + "</td><td>" + H(network.TypeDisplay) + "</td><td>" + H(network.SignalDisplay) + "</td></tr>");
             }
             sb.Append("</table></div>");
-            sb.Append("<div class='card'><h2>" + H(L.T("每日斷線統計", "Daily Outage Statistics")) + "</h2><div class='legend'>" + H(L.T("綠色＝正常　紅色＝確認斷線　橙色＝疑似斷線　紫色＝事件註記　灰色＝暫停或程式中斷", "Green = online, red = confirmed outage, orange = suspected outage, purple = event note, gray = paused or interrupted")) + "</div><table><thead><tr><th>" + H(L.T("電腦", "Computer")) + "</th><th>" + H(L.T("日期", "Date")) + "</th><th>" + H(L.T("有效監控", "Effective Monitoring")) + "</th><th>" + H(L.T("估計斷線", "Estimated Outage")) + "</th><th>" + H(L.T("斷線百分比", "Outage Percentage")) + "</th><th>" + H(L.T("事件／最長", "Events / Longest")) + "</th><th>" + H(L.T("檢查／確認失敗", "Checks / Confirmed Failures")) + "</th></tr></thead><tbody>");
+            bool showDailyLinks = dailyLinks != null;
+            sb.Append("<div class='card'><h2>" + H(L.T("每日斷線統計", "Daily Outage Statistics")) + "</h2><div class='legend'>" + H(L.T("綠色＝正常　紅色＝確認斷線　橙色＝疑似斷線　紫色＝事件註記　灰色＝暫停或程式中斷", "Green = online, red = confirmed outage, orange = suspected outage, purple = event note, gray = paused or interrupted")) + "</div><table><thead><tr><th>" + H(L.T("電腦", "Computer")) + "</th><th>" + H(L.T("日期", "Date")) + "</th><th>" + H(L.T("有效監控", "Effective Monitoring")) + "</th><th>" + H(L.T("估計斷線", "Estimated Outage")) + "</th><th>" + H(L.T("斷線百分比", "Outage Percentage")) + "</th><th>" + H(L.T("事件／最長", "Events / Longest")) + "</th><th>" + H(L.T("檢查／確認失敗", "Checks / Confirmed Failures")) + "</th>" + (showDailyLinks ? "<th>" + H(L.T("詳細資料", "Details")) + "</th>" : "") + "</tr></thead><tbody>");
             foreach (Daily d in dailyRows)
             {
                 double pct = d.Effective.TotalSeconds <= 0 ? 0 : 100.0 * d.Outage.TotalSeconds / d.Effective.TotalSeconds; string cls = pct > 0 ? "bad" : "good";
-                sb.Append("<tr class='daily-text-row'><td>" + H(d.MachineName + " [" + d.MachineId + "]") + "</td><td>" + d.Day.ToString("yyyy/MM/dd") + "</td><td>" + H(Dur(d.Effective)) + "</td><td class='" + cls + "'>" + H(Dur(d.Outage)) + "</td><td class='" + cls + "'>" + pct.ToString("0.00") + "%</td><td>" + d.OutageEvents + " / " + H(Dur(d.LongestOutage)) + "</td><td>" + d.Checks + " / " + d.Offline + "</td></tr>");
-                sb.Append("<tr class='timeline-row'><td colspan='7'><div class='timeline-indent'>" + Timeline(d) + "</div></td></tr>");
+                string detailLink = "";
+                string dailyFile;
+                if (showDailyLinks && dailyLinks.TryGetValue(d.Day.ToString("yyyyMMdd"), out dailyFile)) detailLink = "<a href='" + H(Uri.EscapeDataString(dailyFile)) + "'>" + H(L.T("查看當日詳細資料", "View daily details")) + "</a>";
+                sb.Append("<tr class='daily-text-row'><td>" + H(d.MachineName + " [" + d.MachineId + "]") + "</td><td>" + d.Day.ToString("yyyy/MM/dd") + "</td><td>" + H(Dur(d.Effective)) + "</td><td class='" + cls + "'>" + H(Dur(d.Outage)) + "</td><td class='" + cls + "'>" + pct.ToString("0.00") + "%</td><td>" + d.OutageEvents + " / " + H(Dur(d.LongestOutage)) + "</td><td>" + d.Checks + " / " + d.Offline + "</td>" + (showDailyLinks ? "<td>" + detailLink + "</td>" : "") + "</tr>");
+                sb.Append("<tr class='timeline-row'><td colspan='" + (showDailyLinks ? "8" : "7") + "'><div class='timeline-indent'>" + Timeline(d) + "</div></td></tr>");
             }
             sb.Append("</tbody></table></div>");
             AppendOutageAndNoteTable(sb, selectedOutages, sessions, start, endExclusive);
             AppendDiagnosticTable(sb, sessions, start, endExclusive);
-            AppendDetailedTestRecords(sb, dailyRows);
+            if (includeDetailedRecords) AppendDetailedTestRecords(sb, dailyRows);
             sb.Append("<div class='foot'>" + H(L.T("首次失敗會在 5 秒後快速複查，連續失敗才確認斷線。暫停、程式中斷、電腦關機、程式未執行，以及沒有任何檢查紀錄的日期或工作階段，都不列入有效監控時間及斷線百分比。進階診斷的開關不影響斷線判定與統計；關閉期間的失敗會標示為未執行進階診斷。", "The first failure triggers a fast retry after 5 seconds, and only consecutive failures confirm an outage. Paused, interrupted, powered-off, app-not-running, and no-check dates or sessions are excluded from effective monitoring time and outage percentage. Enabling or disabling advanced diagnostics does not change outage detection or statistics; failures recorded while disabled are marked as not diagnosed.")) + "</div></body></html>");
             return sb.ToString();
         }

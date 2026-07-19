@@ -29,6 +29,7 @@ try {
     $assembly = [Reflection.Assembly]::LoadFrom((Resolve-Path $Executable))
     $archiveType = $assembly.GetType('NetCheck.ArchiveReport', $true)
     $writeReport = $archiveType.GetMethod('WriteCumulativeHtml', [Reflection.BindingFlags]'Static,Public')
+    $forceDailyReports = $archiveType.GetMethod('ForceRebuildDailyDetailReports', [Reflection.BindingFlags]'Static,Public')
     $ensureReport = $archiveType.GetMethod('EnsureCumulativeHtml', [Reflection.BindingFlags]'Static,Public')
     $clearData = $archiveType.GetMethod('ClearAllData', [Reflection.BindingFlags]'Static,Public')
 
@@ -53,15 +54,29 @@ try {
     $readableScreenText = $combinedHtml.Contains('body{font-size:16px') -and $combinedHtml.Contains('table{font-size:16px') -and $combinedHtml.Contains('.metric b{font-size:24px')
     $newestTimelineFirst = $combinedHtml.IndexOf('>2026/07/03</td>', [StringComparison]::Ordinal) -ge 0 -and $combinedHtml.IndexOf('>2026/07/03</td>', [StringComparison]::Ordinal) -lt $combinedHtml.IndexOf('>2026/07/01</td>', [StringComparison]::Ordinal)
     $timelineRunsRightToLeft = $combinedHtml.Contains("<div class='timeline-axis'><span>24:00</span><span>18:00</span><span>12:00</span><span>06:00</span><span>00:00</span></div>")
-    $twoLineTimelineLayout = $combinedHtml.Contains("<tr class='daily-text-row'>") -and $combinedHtml.Contains("<tr class='timeline-row'><td colspan='7'><div class='timeline-indent'><div class='timeline-chart'>") -and $combinedHtml.Contains('.timeline-chart svg{display:block;width:100%') -and $combinedHtml.Contains('.timeline-indent{margin-left:42px')
+    $twoLineTimelineLayout = $combinedHtml.Contains("<tr class='daily-text-row'>") -and $combinedHtml.Contains("<tr class='timeline-row'><td colspan='8'><div class='timeline-indent'><div class='timeline-chart'>") -and $combinedHtml.Contains('.timeline-chart svg{display:block;width:100%') -and $combinedHtml.Contains('.timeline-indent{margin-left:42px')
     $combinedEventTable = $combinedHtml.Contains("<div class='card'><h2>斷線事件與事件註記</h2>") -and $combinedHtml.Contains("class='event-badge event-outage'") -and $combinedHtml.Contains("class='event-badge event-note'") -and $combinedHtml.Contains('Manual note for SECOND-PC') -and -not $combinedHtml.Contains('<h2>事件註記</h2>')
     $timelineNoteAndHover = $combinedHtml.Contains("fill='#8e44ad'") -and $combinedHtml.Contains("class='timeline-hit'") -and $combinedHtml.Contains('事件註記｜Manual note for SECOND-PC') -and $combinedHtml.Contains('確認斷線｜Confirmed failure')
     $outagesBeforeDiagnostics = $combinedHtml.IndexOf("<div class='card'><h2>斷線事件與事件註記</h2>", [StringComparison]::Ordinal) -lt $combinedHtml.IndexOf("<div class='card'><h2>進階分層連線診斷</h2>", [StringComparison]::Ordinal)
     $dateColorGrouping = $combinedHtml.Contains("<tr class='date-shade-0'>") -and $combinedHtml.Contains("<tr class='date-shade-1'>") -and $combinedHtml.Contains('.date-shade-0 td{background:#f5f9ff}')
-    $detailHeading = "<div class='card detail-report'><h2>每日完整測試記錄</h2>"
-    $detailReportLast = $combinedHtml.Contains($detailHeading) -and $combinedHtml.IndexOf($detailHeading, [StringComparison]::Ordinal) -gt $combinedHtml.IndexOf("<div class='card'><h2>進階分層連線診斷</h2>", [StringComparison]::Ordinal)
-    $detailReportComplete = $combinedHtml.Contains('完整測試內容') -and $combinedHtml.Contains('https://example.com/') -and $combinedHtml.Contains('疑似斷線／快速複查') -and $combinedHtml.Contains('Confirmed failure') -and $combinedHtml.Contains('Recovered')
-    $detailNewestFirst = $combinedHtml.IndexOf("<section class='detail-day'><h3>2026/07/03", [StringComparison]::Ordinal) -lt $combinedHtml.IndexOf("<section class='detail-day'><h3>2026/07/01", [StringComparison]::Ordinal) -and $combinedHtml.IndexOf('>11:03:00</td>', [StringComparison]::Ordinal) -lt $combinedHtml.IndexOf('>11:01:00</td>', [StringComparison]::Ordinal)
+    $dailyFiles = @(Get-ChildItem -LiteralPath $testRoot -Filter '*_Daily_Detail_*.html')
+    $firstDaily = @($dailyFiles | Where-Object Name -like '*20260701.html' | Select-Object -First 1)
+    $secondDaily = @($dailyFiles | Where-Object Name -like '*20260703.html' | Select-Object -First 1)
+    $dailyHtml = if ($secondDaily.Count -eq 1) { [IO.File]::ReadAllText($secondDaily[0].FullName) } else { '' }
+    $summaryUsesDailyLinks = $combinedHtml.Contains('NETCHECK_DAILY_DETAIL_LINKS_V1') -and -not $combinedHtml.Contains('每日完整測試記錄') -and $combinedHtml.Contains('查看當日詳細資料') -and $combinedHtml.Contains('Daily_Detail_20260701.html') -and $combinedHtml.Contains('Daily_Detail_20260703.html')
+    $detailReportComplete = $dailyFiles.Count -eq 2 -and $dailyHtml.Contains('每日完整測試記錄') -and $dailyHtml.Contains('完整測試內容') -and $dailyHtml.Contains('https://example.com/') -and $dailyHtml.Contains('疑似斷線／快速複查') -and $dailyHtml.Contains('Confirmed failure') -and $dailyHtml.Contains('Recovered')
+    $detailNewestFirst = $dailyHtml.IndexOf('>11:03:00</td>', [StringComparison]::Ordinal) -lt $dailyHtml.IndexOf('>11:01:00</td>', [StringComparison]::Ordinal)
+    $cachePreserved = $false
+    $forceRebuilt = $false
+    if ($firstDaily.Count -eq 1) {
+        $oldTime = [DateTime]'2000-01-01T00:00:00'
+        $firstDaily[0].LastWriteTime = $oldTime
+        $writeReport.Invoke($null, $writeArgs) | Out-Null
+        $cachePreserved = (Get-Item -LiteralPath $firstDaily[0].FullName).LastWriteTime.Year -eq 2000
+        $forceArgs = [object[]]::new(2); $forceArgs[0] = [string]$report; $forceArgs[1] = [bool]$false
+        $forceDailyReports.Invoke($null, $forceArgs) | Out-Null
+        $forceRebuilt = (Get-Item -LiteralPath $firstDaily[0].FullName).LastWriteTime.Year -gt 2000
+    }
 
     $clearArgs = [object[]]@(0)
     $failures = $clearData.Invoke($null, $clearArgs)
@@ -69,8 +84,8 @@ try {
     $writeReport.Invoke($null, $writeArgs) | Out-Null
     $emptyAfterClear = [IO.File]::ReadAllText($report).Contains('目前沒有有效的監控檢查資料')
 
-    if (-not ($firstGeneration -and $historyCombined -and $gapsExcluded -and $readableScreenText -and $newestTimelineFirst -and $timelineRunsRightToLeft -and $twoLineTimelineLayout -and $combinedEventTable -and $timelineNoteAndHover -and $outagesBeforeDiagnostics -and $dateColorGrouping -and $detailReportLast -and $detailReportComplete -and $detailNewestFirst -and $cleared -and $emptyAfterClear)) { throw 'Cumulative report probe failed.' }
-    Write-Output 'Cumulative history, daily detailed records, gap exclusion, empty-session exclusion, and clear-data reset passed.'
+    if (-not ($firstGeneration -and $historyCombined -and $gapsExcluded -and $readableScreenText -and $newestTimelineFirst -and $timelineRunsRightToLeft -and $twoLineTimelineLayout -and $combinedEventTable -and $timelineNoteAndHover -and $outagesBeforeDiagnostics -and $dateColorGrouping -and $summaryUsesDailyLinks -and $detailReportComplete -and $detailNewestFirst -and $cachePreserved -and $forceRebuilt -and $cleared -and $emptyAfterClear)) { throw 'Cumulative report probe failed.' }
+    Write-Output 'Cumulative summary links, daily detail cache/rebuild, full details, gap exclusion, and clear-data reset passed.'
 }
 finally {
     $resolvedRoot = [IO.Path]::GetFullPath($testRoot)

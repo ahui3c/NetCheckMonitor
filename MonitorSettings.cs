@@ -231,13 +231,18 @@ namespace NetCheck
         private readonly CheckBox preventSleepBox = new CheckBox();
         private readonly CheckBox preventShutdownBox = new CheckBox();
         private readonly ComboBox languageBox = new ComboBox();
+        private readonly Button rebuildDailyReportsButton = new Button();
         private readonly Button saveButton = new Button();
         private readonly Button cancelButton = new Button();
+        private readonly Action rebuildDailyReports;
         public MonitorTargetSettings Result { get; private set; }
         public string SelectedLanguage { get; private set; }
 
-        public MonitorSettingsForm(MonitorTargetSettings current)
+        public MonitorSettingsForm(MonitorTargetSettings current) : this(current, null) { }
+
+        public MonitorSettingsForm(MonitorTargetSettings current, Action rebuildDailyReportsAction)
         {
+            rebuildDailyReports = rebuildDailyReportsAction;
             Text = L.T("監控目標設定", "Monitoring Target Settings");
             Font = new Font("Microsoft JhengHei UI", 10F);
             ClientSize = new Size(620, 625);
@@ -283,6 +288,11 @@ namespace NetCheck
             languageBox.SelectedIndex = L.TraditionalChinese ? 0 : 1;
             var languageHint = new Label { Text = L.T("下次啟動程式時套用", "Applied the next time the app starts"), AutoSize = false, Location = new Point(329, 536), Size = new Size(255, 25), ForeColor = Color.DimGray, Font = new Font(Font.FontFamily, 8.5F) };
 
+            rebuildDailyReportsButton.Text = L.T("強制重新製作每日詳細報表", "Rebuild Daily Detail Reports");
+            rebuildDailyReportsButton.SetBounds(51, 576, 285, 34);
+            rebuildDailyReportsButton.Enabled = rebuildDailyReports != null;
+            rebuildDailyReportsButton.Click += delegate { RebuildDailyReports(); };
+
             saveButton.Text = L.T("儲存", "Save");
             cancelButton.Text = L.T("取消", "Cancel");
             saveButton.SetBounds(352, 580, 110, 30);
@@ -305,7 +315,26 @@ namespace NetCheck
             if (current.CustomTargets != null)
                 for (int i = 0; i < current.CustomTargets.Count && i < targetBoxes.Length; i++) targetBoxes[i].Text = current.CustomTargets[i];
             UpdateTargetState();
-            Controls.AddRange(new Control[] { title, intro, builtInRadio, builtInInfo, customRadio, hint, advancedDiagnosticsBox, preventSleepBox, preventShutdownBox, autoStartWindowsBox, autoStartMonitoringBox, languageLabel, languageBox, languageHint, saveButton, cancelButton });
+            Controls.AddRange(new Control[] { title, intro, builtInRadio, builtInInfo, customRadio, hint, advancedDiagnosticsBox, preventSleepBox, preventShutdownBox, autoStartWindowsBox, autoStartMonitoringBox, languageLabel, languageBox, languageHint, rebuildDailyReportsButton, saveButton, cancelButton });
+        }
+
+        private void RebuildDailyReports()
+        {
+            if (rebuildDailyReports == null) return;
+            if (MessageBox.Show(L.T("要忽略既有快取，重新製作所有日期的詳細 HTML 報表嗎？", "Ignore the existing cache and rebuild detailed HTML reports for every date?"), rebuildDailyReportsButton.Text, MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
+            rebuildDailyReportsButton.Enabled = false;
+            Cursor previous = Cursor;
+            Cursor = Cursors.WaitCursor;
+            try
+            {
+                rebuildDailyReports();
+                MessageBox.Show(L.T("每日詳細報表已全部重新製作完成。", "All daily detail reports were rebuilt."), rebuildDailyReportsButton.Text, MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(L.T("無法重新製作每日詳細報表：", "Could not rebuild daily detail reports: ") + ex.Message, rebuildDailyReportsButton.Text, MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+            finally { Cursor = previous; rebuildDailyReportsButton.Enabled = true; }
         }
 
         private void UpdateTargetState()

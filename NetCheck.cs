@@ -417,7 +417,7 @@ namespace NetCheck
 
         private void ShowMonitorSettings()
         {
-            using (var form = new MonitorSettingsForm(monitorSettings))
+            using (var form = new MonitorSettingsForm(monitorSettings, ForceRebuildDailyDetailReports))
             {
                 if (form.ShowDialog(this) != DialogResult.OK) return;
                 try
@@ -441,6 +441,16 @@ namespace NetCheck
                     MessageBox.Show(L.T("無法儲存設定：", "Could not save settings: ") + ex.Message, form.Text, MessageBoxButtons.OK, MessageBoxIcon.Error);
                 }
             }
+        }
+
+        private void ForceRebuildDailyDetailReports()
+        {
+            string output = reportPath;
+            if (String.IsNullOrEmpty(output)) output = ArchiveReport.EnsureCumulativeHtml(machineName, machineId);
+            if (String.IsNullOrEmpty(output)) throw new InvalidOperationException(L.T("目前沒有可製作報表的測試資料。", "There is currently no test data available for a report."));
+            reportPath = ArchiveReport.ForceRebuildDailyDetailReports(output, running);
+            reportButton.Text = running ? L.T("產生即時報表", "Create Live Report") : L.T("開啟累積報表", "Open Cumulative Report");
+            reportButton.Enabled = true;
         }
 
         private void ShowEventNoteDialog()
