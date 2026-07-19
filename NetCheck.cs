@@ -18,8 +18,8 @@ using Microsoft.Win32;
 [assembly: AssemblyProduct("NetCheckMonitor")]
 [assembly: AssemblyDescription("Internet connection monitoring and outage reporting")]
 [assembly: AssemblyCompany("廖阿輝")]
-[assembly: AssemblyVersion("0.9.5.0")]
-[assembly: AssemblyFileVersion("0.9.5.0")]
+[assembly: AssemblyVersion("0.9.6.0")]
+[assembly: AssemblyFileVersion("0.9.6.0")]
 
 namespace NetCheck
 {
@@ -106,6 +106,7 @@ namespace NetCheck
         private readonly Button cloudButton = new Button();
         private readonly Button aboutButton = new Button();
         private readonly Button settingsButton = new Button();
+        private readonly Button eventNoteButton = new Button();
         private readonly Label versionLabel = new Label();
         private readonly NumericUpDown intervalBox = new NumericUpDown();
         private readonly ListView recentList = new ListView();
@@ -144,8 +145,10 @@ namespace NetCheck
         private NetworkSnapshot currentNetwork;
         private AdvancedDiagnosticResult lastAdvancedDiagnostic;
         private DateTime lastAdvancedDiagnosticAt = DateTime.MinValue;
+        private bool shutdownBlockReasonActive;
         private readonly List<CheckRecord> records = new List<CheckRecord>();
         private readonly List<TimePeriod> pauses = new List<TimePeriod>();
+        private readonly List<EventNote> eventNotes = new List<EventNote>();
 
         private const int FastRetrySeconds = 5;
         private const int FastRetryLimit = 6;
@@ -162,8 +165,13 @@ namespace NetCheck
         private static extern uint SetThreadExecutionState(uint esFlags);
         [DllImport("user32.dll")]
         private static extern bool DestroyIcon(IntPtr handle);
+        [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+        private static extern bool ShutdownBlockReasonCreate(IntPtr window, string reason);
+        [DllImport("user32.dll", SetLastError = true)]
+        private static extern bool ShutdownBlockReasonDestroy(IntPtr window);
         private const uint ES_CONTINUOUS = 0x80000000;
         private const uint ES_SYSTEM_REQUIRED = 0x00000001;
+        private const int WM_QUERYENDSESSION = 0x0011;
 
         public MainForm()
         {
@@ -203,6 +211,7 @@ namespace NetCheck
             cloudButton.Text = L.T("Google Drive 備份設定", "Google Drive Backup");
             aboutButton.Text = L.T("關於", "About");
             settingsButton.Text = L.T("設定", "Settings");
+            eventNoteButton.Text = L.T("事件註記", "Event Note");
             startButton.SetBounds(25, 112, 125, 38);
             pauseButton.SetBounds(160, 112, 105, 38);
             stopButton.SetBounds(275, 112, 175, 38);
@@ -225,6 +234,10 @@ namespace NetCheck
             settingsButton.SetBounds(280, 502, 80, 24);
             settingsButton.Font = new Font(Font.FontFamily, 8.5F);
             settingsButton.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
+            eventNoteButton.SetBounds(370, 502, 120, 24);
+            eventNoteButton.Font = new Font(Font.FontFamily, 8.5F);
+            eventNoteButton.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
+            eventNoteButton.Enabled = false;
             pauseButton.Enabled = false;
             stopButton.Enabled = false;
             reportButton.Enabled = false;
@@ -253,7 +266,7 @@ namespace NetCheck
             recentList.Columns.Add(L.T("延遲", "Latency"), 90);
             recentList.Columns.Add(L.T("檢測目標 / 說明", "Target / Details"), 365);
 
-            Controls.AddRange(new Control[] { title, versionLabel, stateLabel, intervalLabel, intervalBox, startButton, pauseButton, stopButton, reportButton, dataButton, lastLabel, statsLabel, networkInfoLabel, recentList, clearDataButton, exitButton, cloudButton, aboutButton, settingsButton });
+            Controls.AddRange(new Control[] { title, versionLabel, stateLabel, intervalLabel, intervalBox, startButton, pauseButton, stopButton, reportButton, dataButton, lastLabel, statsLabel, networkInfoLabel, recentList, clearDataButton, exitButton, cloudButton, aboutButton, settingsButton, eventNoteButton });
 
             startButton.Click += delegate { StartMonitoring(); };
             pauseButton.Click += delegate { TogglePause(); };
@@ -265,6 +278,7 @@ namespace NetCheck
             cloudButton.Click += delegate { ShowCloudSettings(); };
             aboutButton.Click += delegate { using (var form = new AboutForm()) form.ShowDialog(this); };
             settingsButton.Click += delegate { ShowMonitorSettings(); };
+            eventNoteButton.Click += delegate { ShowEventNoteDialog(); };
             FormClosing += OnFormClosing;
             Shown += delegate { BeginInvoke((MethodInvoker)HandleStartupMonitoring); };
             Resize += delegate { if (WindowState == FormWindowState.Minimized) HideToTray(); };
@@ -282,6 +296,10 @@ namespace NetCheck
             trayMenu.Items.Add(L.T("結束程式", "Exit"), null, delegate { ShowFromTray(); RequestExit(); });
             trayIcon.ContextMenuStrip = trayMenu;
             EnsureMachineIdentity();
+            try { reportPath = ArchiveReport.EnsureCumulativeHtml(machineName, machineId); }
+            catch { reportPath = ArchiveReport.FindLatestCumulativeHtml(machineId); }
+            if (!String.IsNullOrEmpty(reportPath)) reportButton.Text = L.T("開啟累積報表", "Open Cumulative Report");
+            reportButton.Enabled = !String.IsNullOrEmpty(reportPath);
             monitorSettings = MonitorSettingsStore.Load();
             cloudManager = new CloudBackupManager(machineName, machineId);
         }
@@ -290,6 +308,7 @@ namespace NetCheck
         {
             records.Clear();
             pauses.Clear();
+            eventNotes.Clear();
             recentList.Items.Clear();
             reportPath = null;
             reportButton.Text = L.T("產生即時報表", "Create Live Report");
@@ -333,6 +352,7 @@ namespace NetCheck
             WriteMarker("STARTED", L.T("開始監控；檢查間隔 ", "Monitoring started; interval ") + intervalBox.Value + L.T(" 秒", " seconds"));
             WriteMarker("TARGETS", (monitorSettings.UseCustomTargets ? L.T("自訂目標：", "Custom targets: ") : L.T("內建目標：", "Built-in targets: ")) + String.Join(" | ", activeTestUrls));
             WriteMarker("ADVANCED_DIAGNOSTICS", monitorSettings.AdvancedDiagnosticsEnabled ? "ENABLED" : "DISABLED");
+            WriteMarker("POWER_PROTECTION", PowerProtectionMarker(monitorSettings));
             WriteMarker("NETWORK", currentNetwork.ToMarker());
 
             running = true;
@@ -342,8 +362,9 @@ namespace NetCheck
             settingsButton.Enabled = true;
             pauseButton.Enabled = true;
             stopButton.Enabled = true;
+            eventNoteButton.Enabled = true;
             pauseButton.Text = L.T("暫停", "Pause");
-            SetAwake(true);
+            UpdatePowerProtection();
             UpdateState(L.T("準備檢查…", "Preparing check…"), Color.DarkOrange);
             RenderNetworkInfo(currentNetwork);
             SetTrayConnectionState(TrayConnectionState.Checking, true);
@@ -380,7 +401,13 @@ namespace NetCheck
                 string prefix = deleted == 0 ? L.T("沒有清除任何資料。偵測到仍被使用或無法刪除的檔案。", "No data was cleared. Some files are in use or could not be deleted.") : L.T("已清除 ", "Cleared ") + deleted + L.T(" 個檔案，但下列檔案無法刪除。", " files, but the following files could not be deleted.");
                 MessageBox.Show(prefix + L.T("\n請先結束所有 NetCheck 監控程式後再試一次。\n\n", "\nClose all NetCheck monitoring programs and try again.\n\n") + String.Join("\n", failures.ToArray()), L.T("資料清除未完成", "Data Clearing Incomplete"), MessageBoxButtons.OK, MessageBoxIcon.Warning);
             }
-            else MessageBox.Show(L.T("已清除 ", "Cleared ") + deleted + L.T(" 個 NetCheck 儲存檔案。", " NetCheck saved files."), L.T("清除完成", "Clearing Complete"), MessageBoxButtons.OK, MessageBoxIcon.Information);
+            else
+            {
+                reportPath = null;
+                reportButton.Text = L.T("開啟累積報表", "Open Cumulative Report");
+                reportButton.Enabled = false;
+                MessageBox.Show(L.T("已清除 ", "Cleared ") + deleted + L.T(" 個 NetCheck 儲存檔案。", " NetCheck saved files."), L.T("清除完成", "Clearing Complete"), MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
         }
 
         private void ShowCloudSettings()
@@ -395,13 +422,17 @@ namespace NetCheck
                 if (form.ShowDialog(this) != DialogResult.OK) return;
                 try
                 {
+                    string previousLanguage = LanguagePreferenceStore.Load() ?? LanguagePreferenceStore.English;
                     bool restarted = ApplyMonitorSettings(form.Result);
+                    bool languageChanged = !String.Equals(previousLanguage, form.SelectedLanguage, StringComparison.OrdinalIgnoreCase);
+                    LanguagePreferenceStore.Save(form.SelectedLanguage);
                     string autoStartWarning = null;
                     try { AutoStartManager.SetEnabled(form.Result.AutoStartWindows); }
                     catch (Exception ex) { autoStartWarning = ex.Message; }
                     string message = restarted
                         ? L.T("設定已儲存。原監控資料與報表已安全保存，並已使用新目標重新開始監控。", "Settings saved. The previous monitoring data and report were saved safely, and monitoring restarted with the new targets.")
                         : L.T("設定已儲存；目前監控使用的目標沒有變更，因此不需要重新啟動監控。", "Settings saved. The targets used by the current monitoring session did not change, so monitoring was not restarted.");
+                    if (languageChanged) message += L.T("\n\n介面語言將在下次啟動程式時套用。", "\n\nThe interface language will be applied the next time the app starts.");
                     if (!String.IsNullOrEmpty(autoStartWarning)) message += L.T("\n\n但無法更新 Windows 自動啟動設定：", "\n\nWindows startup could not be updated: ") + autoStartWarning;
                     MessageBox.Show(message, form.Text, MessageBoxButtons.OK, String.IsNullOrEmpty(autoStartWarning) ? MessageBoxIcon.Information : MessageBoxIcon.Warning);
                 }
@@ -412,14 +443,38 @@ namespace NetCheck
             }
         }
 
+        private void ShowEventNoteDialog()
+        {
+            if (!running) return;
+            using (var form = new EventNoteForm())
+                if (form.ShowDialog(this) == DialogResult.OK) AddEventNote(form.NoteText);
+        }
+
+        private void AddEventNote(string text)
+        {
+            if (!running || String.IsNullOrWhiteSpace(text)) return;
+            string value = text.Trim();
+            if (value.Length > 500) value = value.Substring(0, 500);
+            var note = new EventNote { Time = DateTime.Now, Text = value };
+            lock (eventNotes) eventNotes.Add(note);
+            WriteMarkerAt(note.Time, "EVENT_NOTE", note.Text);
+            PersistSessionState();
+            AddRecent(note.Time, L.T("事件", "Event"), "—", note.Text, Color.MediumPurple);
+        }
+
         private bool ApplyMonitorSettings(MonitorTargetSettings updated)
         {
             if (updated == null) throw new ArgumentNullException("updated");
             bool restart = running && MonitoringTargetsChanged(monitorSettings, updated);
             MonitorSettingsStore.Save(updated);
             monitorSettings = updated;
+            UpdatePowerProtection();
             if (!updated.AdvancedDiagnosticsEnabled) { lastAdvancedDiagnostic = null; lastAdvancedDiagnosticAt = DateTime.MinValue; }
-            if (running) WriteMarker("ADVANCED_DIAGNOSTICS", updated.AdvancedDiagnosticsEnabled ? "ENABLED" : "DISABLED");
+            if (running)
+            {
+                WriteMarker("ADVANCED_DIAGNOSTICS", updated.AdvancedDiagnosticsEnabled ? "ENABLED" : "DISABLED");
+                WriteMarker("POWER_PROTECTION", PowerProtectionMarker(updated));
+            }
             if (restart)
             {
                 StopMonitoring(false);
@@ -504,7 +559,7 @@ namespace NetCheck
                                 request.Method = "GET";
                                 request.Timeout = 5000;
                                 request.ReadWriteTimeout = 5000;
-                                request.UserAgent = "NetCheckMonitor/0.9.5";
+                                request.UserAgent = "NetCheckMonitor/0.9.6";
                                 request.AllowAutoRedirect = true;
                                 using (var response = (HttpWebResponse)request.GetResponse())
                                 {
@@ -674,6 +729,7 @@ namespace NetCheck
         {
             records.Clear();
             pauses.Clear();
+            eventNotes.Clear();
             recentList.Items.Clear();
             LoadSessionHistory(state.CsvPath);
             csvPath = state.CsvPath;
@@ -709,6 +765,7 @@ namespace NetCheck
                 WriteMarkerAt(now, "SESSION_RESUMED", L.T("接續未完成的監控工作", "Unfinished monitoring session resumed"));
             }
             WriteMarker("NETWORK", currentNetwork.ToMarker());
+            WriteMarker("POWER_PROTECTION", PowerProtectionMarker(monitorSettings));
 
             running = true;
             reportPath = null;
@@ -719,8 +776,9 @@ namespace NetCheck
             settingsButton.Enabled = true;
             pauseButton.Enabled = true;
             stopButton.Enabled = true;
+            eventNoteButton.Enabled = true;
             pauseButton.Text = paused ? L.T("繼續", "Resume") : L.T("暫停", "Pause");
-            SetAwake(true);
+            UpdatePowerProtection();
             AddRecent(now, L.T("已接續", "Resumed"), "—", L.T("原監控資料已載入；中斷時段不列入統計", "Previous data loaded; interruption excluded from statistics"), Color.RoyalBlue);
             UpdateState(paused ? L.T("已接續，維持暫停", "Resumed and still paused") : L.T("已接續，準備檢查…", "Resumed; preparing check…"), paused ? Color.Gray : Color.DarkOrange);
             RenderNetworkInfo(currentNetwork);
@@ -803,7 +861,7 @@ namespace NetCheck
             try
             {
                 reportPath = BuildReport(DateTime.Now, true);
-                AddRecent(DateTime.Now, L.T("報表", "Report"), "—", L.T("即時報表已更新，監控持續進行", "Live report updated; monitoring continues"), Color.RoyalBlue);
+                AddRecent(DateTime.Now, L.T("報表", "Report"), "—", L.T("累積即時報表已更新，監控持續進行", "Cumulative live report updated; monitoring continues"), Color.RoyalBlue);
                 if (open) OpenReport();
             }
             catch (Exception ex)
@@ -827,17 +885,18 @@ namespace NetCheck
             CloseWriter(ref backupWriter);
             SessionStateStore.Delete();
             ResetOutageTracking();
-            SetAwake(false);
+            UpdatePowerProtection();
             intervalBox.Enabled = true;
             startButton.Enabled = true;
             settingsButton.Enabled = true;
             pauseButton.Enabled = false;
             stopButton.Enabled = false;
+            eventNoteButton.Enabled = false;
             pauseButton.Text = L.T("暫停", "Pause");
             UpdateState(L.T("監控已結束", "Monitoring stopped"), Color.DimGray);
             SetTrayConnectionState(TrayConnectionState.Idle, false);
             reportPath = BuildReport(DateTime.Now, false);
-            reportButton.Text = L.T("開啟最終報表", "Open Final Report");
+            reportButton.Text = L.T("開啟累積報表", "Open Cumulative Report");
             reportButton.Enabled = File.Exists(reportPath);
             if (openReport) OpenReport();
         }
@@ -872,7 +931,7 @@ namespace NetCheck
             if (timer != null) { timer.Dispose(); timer = null; }
             CloseWriter(ref writer);
             CloseWriter(ref backupWriter);
-            SetAwake(false);
+            UpdatePowerProtection();
         }
 
         private void RequestExit()
@@ -897,9 +956,18 @@ namespace NetCheck
 
         private string BuildReport(DateTime sessionEnd, bool live)
         {
+            string directory = Path.GetDirectoryName(csvPath);
+            string name = "NetCheck_" + SafeFilePart(machineName, 16) + "-" + machineId + (live ? "_Cumulative_Live.html" : "_Cumulative_Report.html");
+            return ArchiveReport.WriteCumulativeHtml(Path.Combine(directory, name), live);
+        }
+
+        private string BuildSessionReportLegacy(DateTime sessionEnd, bool live)
+        {
             string path = live ? Path.Combine(Path.GetDirectoryName(csvPath), Path.GetFileNameWithoutExtension(csvPath) + "_Live.html") : Path.ChangeExtension(csvPath, ".html");
             List<CheckRecord> snapshot;
             lock (records) snapshot = new List<CheckRecord>(records);
+            List<EventNote> eventSnapshot;
+            lock (eventNotes) eventSnapshot = new List<EventNote>(eventNotes);
             var pauseSnapshot = new List<TimePeriod>();
             foreach (var p in pauses) pauseSnapshot.Add(new TimePeriod { Start = p.Start, End = p.End });
             if (paused) pauseSnapshot.Add(new TimePeriod { Start = pauseStart, End = sessionEnd });
@@ -966,6 +1034,7 @@ namespace NetCheck
             Row(sb, L.T("原始紀錄", "Raw Log"), Path.GetFileName(csvPath));
             if (!String.IsNullOrEmpty(backupCsvPath)) Row(sb, L.T("當機備援紀錄", "Crash-Recovery Log"), backupCsvPath);
             sb.Append("</table></div>");
+            AppendEventNotes(sb, eventSnapshot);
             sb.Append("<div class='card'><h2>" + H(L.T("每日斷線統計", "Daily Outage Statistics")) + "</h2><table><thead><tr><th>" + H(L.T("日期", "Date")) + "</th><th>" + H(L.T("有效監控時間", "Effective Monitoring")) + "</th><th>" + H(L.T("估計斷線時間", "Estimated Outage")) + "</th><th>" + H(L.T("每日斷線百分比", "Daily Outage Percentage")) + "</th><th>" + H(L.T("斷線事件", "Outage Events")) + "</th><th>" + H(L.T("最長斷線", "Longest Outage")) + "</th><th>" + H(L.T("確認失敗檢查", "Confirmed Failed Checks")) + "</th></tr></thead><tbody>");
             foreach (var d in dailyStats)
             {
@@ -1008,6 +1077,20 @@ namespace NetCheck
                     if (String.IsNullOrEmpty(finding)) finding = L.T("未執行進階診斷", "Advanced diagnostics not performed");
                     sb.Append("<tr><td>" + record.Time.ToString("yyyy/MM/dd HH:mm:ss") + "</td><td>" + H(record.Status) + "</td><td>" + H(finding) + "</td><td>" + H(AdvancedDiagnosticResult.EvidenceFromLog(record.Detail)) + "</td></tr>");
                 }
+                sb.Append("</table>");
+            }
+            sb.Append("</div>");
+        }
+
+        private static void AppendEventNotes(StringBuilder sb, List<EventNote> notes)
+        {
+            sb.Append("<div class='card'><h2>" + H(L.T("事件註記", "Event Notes")) + "</h2>");
+            if (notes == null || notes.Count == 0) sb.Append("<p>" + H(L.T("沒有手動事件註記。", "No manual event notes.")) + "</p>");
+            else
+            {
+                notes.Sort(delegate (EventNote a, EventNote b) { return a.Time.CompareTo(b.Time); });
+                sb.Append("<table><tr><th>" + H(L.T("時間", "Time")) + "</th><th>" + H(L.T("事件或處理內容", "Event or Action")) + "</th></tr>");
+                foreach (EventNote note in notes) sb.Append("<tr><td>" + note.Time.ToString("yyyy/MM/dd HH:mm:ss") + "</td><td>" + H(note.Text) + "</td></tr>");
                 sb.Append("</table>");
             }
             sb.Append("</div>");
@@ -1263,7 +1346,8 @@ namespace NetCheck
                     else if (fields[1] == "MARKER")
                     {
                         string status = fields[2];
-                        if (status == "PAUSED" || status == "INTERRUPTED") { pauseOpen = true; openPause = time; }
+                        if (status == "EVENT_NOTE") eventNotes.Add(new EventNote { Time = time, Text = fields[5] });
+                        else if (status == "PAUSED" || status == "INTERRUPTED") { pauseOpen = true; openPause = time; }
                         else if ((status == "RESUMED" || status == "SESSION_RESUMED") && pauseOpen)
                         {
                             if (time > openPause) pauses.Add(new TimePeriod { Start = openPause, End = time });
@@ -1273,6 +1357,7 @@ namespace NetCheck
                 }
             }
             records.Sort(delegate (CheckRecord a, CheckRecord b) { return a.Time.CompareTo(b.Time); });
+            eventNotes.Sort(delegate (EventNote a, EventNote b) { return a.Time.CompareTo(b.Time); });
         }
 
         private static List<string> ParseCsvLine(string line)
@@ -1416,7 +1501,35 @@ namespace NetCheck
         }
 
         private static Icon LoadApplicationIcon() { try { Icon icon = Icon.ExtractAssociatedIcon(Assembly.GetExecutingAssembly().Location); return icon ?? SystemIcons.Application; } catch { return SystemIcons.Application; } }
-        private static void SetAwake(bool awake) { SetThreadExecutionState(awake ? ES_CONTINUOUS | ES_SYSTEM_REQUIRED : ES_CONTINUOUS); }
+        private static string PowerProtectionMarker(MonitorTargetSettings settings)
+        {
+            return "PreventSleep=" + (settings != null && settings.PreventSleepWhileMonitoring ? "1" : "0")
+                + ";PreventShutdown=" + (settings != null && settings.PreventShutdownWhileMonitoring ? "1" : "0");
+        }
+
+        private bool ShouldBlockWindowsShutdown()
+        {
+            return running && monitorSettings != null && monitorSettings.PreventShutdownWhileMonitoring;
+        }
+
+        private void UpdatePowerProtection()
+        {
+            bool preventSleep = running && monitorSettings != null && monitorSettings.PreventSleepWhileMonitoring;
+            SetThreadExecutionState(preventSleep ? ES_CONTINUOUS | ES_SYSTEM_REQUIRED : ES_CONTINUOUS);
+            bool blockShutdown = ShouldBlockWindowsShutdown();
+            if (blockShutdown && IsHandleCreated && !shutdownBlockReasonActive)
+            {
+                shutdownBlockReasonActive = ShutdownBlockReasonCreate(Handle, L.T("NetCheckMonitor 正在進行長時間網路監控；請先停止監控再關機。", "NetCheckMonitor is running a long-term network test. Stop monitoring before shutting down."));
+            }
+            else if (!blockShutdown) ReleaseShutdownBlockReason();
+        }
+
+        private void ReleaseShutdownBlockReason()
+        {
+            if (!shutdownBlockReasonActive) return;
+            try { if (IsHandleCreated) ShutdownBlockReasonDestroy(Handle); }
+            finally { shutdownBlockReasonActive = false; }
+        }
         private void OpenReport() { if (!String.IsNullOrEmpty(reportPath) && File.Exists(reportPath)) Process.Start(new ProcessStartInfo(reportPath) { UseShellExecute = true }); }
         private void HideToTray()
         {
@@ -1431,6 +1544,12 @@ namespace NetCheck
 
         protected override void WndProc(ref Message message)
         {
+            if (message.Msg == WM_QUERYENDSESSION && ShouldBlockWindowsShutdown())
+            {
+                PersistSessionState();
+                message.Result = IntPtr.Zero;
+                return;
+            }
             if (message.Msg == SingleInstance.ShowWindowMessage)
             {
                 ShowFromTray();
@@ -1466,6 +1585,7 @@ namespace NetCheck
             if (running && e.CloseReason == CloseReason.WindowsShutDown) PrepareForSystemRestart();
             else if (running) StopMonitoring(false);
             if (cloudManager != null) cloudManager.Dispose();
+            ReleaseShutdownBlockReason();
             trayIcon.Visible = false;
             trayIcon.Dispose();
             if (neutralTrayIcon != null) neutralTrayIcon.Dispose();
@@ -1477,7 +1597,7 @@ namespace NetCheck
 
     internal sealed class AboutForm : Form
     {
-        internal const string AppVersion = "0.9.5";
+        internal const string AppVersion = "0.9.6";
         internal const string Purpose = "可定時監控對外網路連線，紀錄斷線並產生圖文報表，並支援網路硬碟備份，PDF 下載，程式完全免費開源無廣告。";
         internal const string EnglishPurpose = "Scheduled monitoring of external Internet connectivity, outage logging, graphical reports, cloud-drive backup, and PDF downloads. Completely free, open source, and ad-free.";
         private const string GitHubProjectUrl = "https://github.com/ahui3c/NetCheckMonitor";
@@ -1609,6 +1729,19 @@ namespace NetCheck
             {
                 Application.EnableVisualStyles();
                 Application.SetCompatibleTextRenderingDefault(false);
+                if (LanguagePreferenceStore.Load() == null)
+                {
+                    using (var languageForm = new LanguageSelectionForm())
+                    {
+                        if (languageForm.ShowDialog() != DialogResult.OK) return;
+                        try { LanguagePreferenceStore.Save(languageForm.SelectedLanguage); }
+                        catch (Exception ex)
+                        {
+                            MessageBox.Show("無法儲存語言設定，程式無法繼續。\n\nCould not save the language setting, so the app cannot continue.\n\n" + ex.Message, "NetCheckMonitor", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                            return;
+                        }
+                    }
+                }
                 ApplicationRecovery.Register();
                 Application.Run(new MainForm());
             }

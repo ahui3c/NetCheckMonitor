@@ -6,20 +6,16 @@
 
 NetCheckMonitor is a free, open-source, ad-free Windows utility that periodically checks whether a computer can reach the public Internet. It records outages over hours or days and creates graphical HTML and PDF reports suitable for troubleshooting home Internet service or documenting connection problems for an ISP.
 
-Current version: **0.9.5**
+Current version: **0.9.6**
 
-## What's new in 0.9.5
+## What's new in 0.9.6
 
-- Added automatic launch after Windows sign-in so unfinished monitoring can resume after an unexpected restart.
-- Added an option to start monitoring automatically when the app opens.
-- Added up to three custom website or IP test targets.
-- Expanded reports with daily outage, latency, network-interface, and other detailed test data.
-- Added color-coded system-tray connection status: green for online, red for outage, orange for checking, and gray for paused.
-- Added connection type, active adapter, and Wi-Fi signal information to the app and CSV/HTML/PDF reports.
-- Added optional advanced layered connectivity diagnostics.
-- Improved fast outage verification, prolonged-outage tracking, abnormal-exit handling, and data recovery details.
+- Added options to prevent Windows sleep while monitoring and optionally block Windows shutdown/restart.
+- Replaced automatic system-language detection with a first-launch Traditional Chinese/English choice that can be changed later in Settings.
+- Added timestamped event notes and quick entries for tracking equipment restarts, weather, and other troubleshooting actions alongside outages.
+- Refined cumulative HTML/PDF reports, 24-hour timelines, integrated events, hover details, ordering, text sizing, and table readability.
 
-See the complete [0.9.5 release notes](docs/RELEASE_NOTES_0.9.5.md).
+See the complete [0.9.6 release notes](docs/RELEASE_NOTES_0.9.6.md).
 
 ## Download
 
@@ -39,17 +35,20 @@ See the complete [0.9.5 release notes](docs/RELEASE_NOTES_0.9.5.md).
 - Custom settings are saved for the current Windows user. Changing targets while monitoring starts a separate session so one report cannot mix target definitions.
 - Settings remain available while monitoring. If the targets change, the current session and report are saved safely before monitoring restarts automatically with the new targets.
 - Optional advanced layered diagnostics run only after an HTTPS failure and check the adapter, gateway, DNS, IPv4, IPv6, HTTPS target, and Wi-Fi signal. This setting never changes outage detection, duration, or percentage statistics.
-- Supports Traditional Chinese and English. Traditional Chinese Windows installations use Chinese automatically; every unsupported language defaults to English.
+- Supports Traditional Chinese and English. The user chooses the interface language on first launch and can change it later in Settings.
 - Pause and resume monitoring. Paused periods are marked but excluded from availability and daily outage percentages.
+- Add timestamped event notes while monitoring using custom text or quick entries for restarting the modem, wireless router, or computer, rain, and thunder. Notes appear in CSV/HTML/PDF reports without changing outage statistics.
 - Flushes every check to a UTF-8 CSV immediately and keeps a local recovery copy.
 - Creates live HTML reports without interrupting monitoring.
+- Live and final HTML reports cumulatively analyze every historical CSV that has not been cleared. Gaps between sessions, app-not-running periods, and sessions without checks are excluded from statistics.
 - Downloads A4 landscape PDF reports for all saved data or a selected date range.
 - Reports include daily outage statistics, longest/average/shortest outages, 95th-percentile and maximum latency, average latency variation, and 24-hour timelines.
 - Active-session state is saved durably. After a crash or Windows restart, the original CSV can be resumed while time when the app was not running is marked and excluded.
 - Settings can independently launch NetCheckMonitor after Windows sign-in and start monitoring automatically when the app opens. An unfinished session is offered for recovery first.
 - Startup checks whether NetCheckMonitor is already running. A duplicate launch shows the existing window instead of creating a second monitoring process.
 - Performs scheduled daily Google Drive backups of the complete PDF and raw CSV to `Net_Check`.
-- Prevents Windows system sleep while monitoring. The X button minimizes to the system tray; the first use shows a one-time reminder to exit safely with the lower-right **Exit** button.
+- Settings can prevent Windows sleep while monitoring and can separately block shutdown or restart. When shutdown protection is enabled, stop monitoring or use the lower-right **Exit** button first. Forced updates, power loss, and hardware resets can still interrupt the app.
+- The X button minimizes to the system tray; the first use shows a one-time reminder to exit safely with the lower-right **Exit** button.
 - Safely exits only after records are flushed and a final report has been created.
 
 ## Quick start

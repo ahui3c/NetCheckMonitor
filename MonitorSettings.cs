@@ -65,6 +65,8 @@ namespace NetCheck
         public bool AutoStartWindows { get; set; }
         public bool AutoStartMonitoring { get; set; }
         public bool AdvancedDiagnosticsEnabled { get; set; }
+        public bool PreventSleepWhileMonitoring { get; set; }
+        public bool PreventShutdownWhileMonitoring { get; set; }
     }
 
     internal static class MonitorSettingsStore
@@ -132,7 +134,9 @@ namespace NetCheck
                 CustomTargets = new List<string> { "http://127.0.0.1:9/", "http://127.0.0.1:8/", "http://127.0.0.1:7/" },
                 AutoStartWindows = true,
                 AutoStartMonitoring = true,
-                AdvancedDiagnosticsEnabled = true
+                AdvancedDiagnosticsEnabled = true,
+                PreventSleepWhileMonitoring = true,
+                PreventShutdownWhileMonitoring = false
             };
             SaveToPath(path, expected);
             MonitorTargetSettings loaded = LoadFromPath(path);
@@ -148,6 +152,8 @@ namespace NetCheck
                 && loaded.AutoStartWindows
                 && loaded.AutoStartMonitoring
                 && loaded.AdvancedDiagnosticsEnabled
+                && loaded.PreventSleepWhileMonitoring
+                && !loaded.PreventShutdownWhileMonitoring
                 && normalized;
         }
 
@@ -160,7 +166,7 @@ namespace NetCheck
 
         private static MonitorTargetSettings DefaultSettings()
         {
-            return new MonitorTargetSettings { UseCustomTargets = false, CustomTargets = new List<string>() };
+            return new MonitorTargetSettings { UseCustomTargets = false, CustomTargets = new List<string>(), PreventSleepWhileMonitoring = true };
         }
 
         private static MonitorTargetSettings LoadFromPath(string path)
@@ -168,8 +174,11 @@ namespace NetCheck
             try
             {
                 if (!File.Exists(path)) return DefaultSettings();
-                var value = new JavaScriptSerializer().Deserialize<MonitorTargetSettings>(File.ReadAllText(path, Encoding.UTF8));
+                string json = File.ReadAllText(path, Encoding.UTF8);
+                bool hasSleepSetting = json.IndexOf("\"PreventSleepWhileMonitoring\"", StringComparison.Ordinal) >= 0;
+                var value = new JavaScriptSerializer().Deserialize<MonitorTargetSettings>(json);
                 if (value == null) return DefaultSettings();
+                if (!hasSleepSetting) value.PreventSleepWhileMonitoring = true;
                 if (value.CustomTargets == null) value.CustomTargets = new List<string>();
                 var valid = new List<string>();
                 foreach (string target in value.CustomTargets)
@@ -219,15 +228,19 @@ namespace NetCheck
         private readonly CheckBox autoStartWindowsBox = new CheckBox();
         private readonly CheckBox autoStartMonitoringBox = new CheckBox();
         private readonly CheckBox advancedDiagnosticsBox = new CheckBox();
+        private readonly CheckBox preventSleepBox = new CheckBox();
+        private readonly CheckBox preventShutdownBox = new CheckBox();
+        private readonly ComboBox languageBox = new ComboBox();
         private readonly Button saveButton = new Button();
         private readonly Button cancelButton = new Button();
         public MonitorTargetSettings Result { get; private set; }
+        public string SelectedLanguage { get; private set; }
 
         public MonitorSettingsForm(MonitorTargetSettings current)
         {
             Text = L.T("監控目標設定", "Monitoring Target Settings");
             Font = new Font("Microsoft JhengHei UI", 10F);
-            ClientSize = new Size(620, 518);
+            ClientSize = new Size(620, 625);
             FormBorderStyle = FormBorderStyle.FixedDialog;
             MaximizeBox = false;
             MinimizeBox = false;
@@ -253,15 +266,27 @@ namespace NetCheck
 
             advancedDiagnosticsBox.Text = L.T("HTTPS 失敗時執行進階分層連線診斷（選用）", "Run advanced layered diagnostics after an HTTPS failure (optional)");
             advancedDiagnosticsBox.SetBounds(51, 380, 535, 30);
+            preventSleepBox.Text = L.T("監控期間防止電腦進入休眠（建議）", "Prevent the computer from sleeping while monitoring (recommended)");
+            preventSleepBox.SetBounds(51, 412, 535, 26);
+            preventShutdownBox.Text = L.T("監控期間阻止 Windows 關機或重新啟動（請先停止監控）", "Block Windows shutdown or restart while monitoring (stop monitoring first)");
+            preventShutdownBox.SetBounds(51, 439, 555, 26);
             autoStartWindowsBox.Text = L.T("登入 Windows 後自動啟動程式", "Start the app after Windows sign-in");
-            autoStartWindowsBox.SetBounds(51, 412, 535, 26);
+            autoStartWindowsBox.SetBounds(51, 471, 535, 26);
             autoStartMonitoringBox.Text = L.T("程式啟動後自動開始監控", "Start monitoring automatically when the app opens");
-            autoStartMonitoringBox.SetBounds(51, 439, 535, 26);
+            autoStartMonitoringBox.SetBounds(51, 498, 535, 26);
+
+            var languageLabel = new Label { Text = L.T("介面語言", "Interface language"), AutoSize = true, Location = new Point(51, 536) };
+            languageBox.DropDownStyle = ComboBoxStyle.DropDownList;
+            languageBox.Items.Add("繁體中文");
+            languageBox.Items.Add("English");
+            languageBox.SetBounds(155, 530, 160, 28);
+            languageBox.SelectedIndex = L.TraditionalChinese ? 0 : 1;
+            var languageHint = new Label { Text = L.T("下次啟動程式時套用", "Applied the next time the app starts"), AutoSize = false, Location = new Point(329, 536), Size = new Size(255, 25), ForeColor = Color.DimGray, Font = new Font(Font.FontFamily, 8.5F) };
 
             saveButton.Text = L.T("儲存", "Save");
             cancelButton.Text = L.T("取消", "Cancel");
-            saveButton.SetBounds(352, 476, 110, 30);
-            cancelButton.SetBounds(475, 476, 110, 30);
+            saveButton.SetBounds(352, 580, 110, 30);
+            cancelButton.SetBounds(475, 580, 110, 30);
             cancelButton.DialogResult = DialogResult.Cancel;
             saveButton.Click += delegate { ValidateAndClose(); };
             builtInRadio.CheckedChanged += delegate { UpdateTargetState(); };
@@ -275,10 +300,12 @@ namespace NetCheck
             autoStartWindowsBox.Checked = current.AutoStartWindows;
             autoStartMonitoringBox.Checked = current.AutoStartMonitoring;
             advancedDiagnosticsBox.Checked = current.AdvancedDiagnosticsEnabled;
+            preventSleepBox.Checked = current.PreventSleepWhileMonitoring;
+            preventShutdownBox.Checked = current.PreventShutdownWhileMonitoring;
             if (current.CustomTargets != null)
                 for (int i = 0; i < current.CustomTargets.Count && i < targetBoxes.Length; i++) targetBoxes[i].Text = current.CustomTargets[i];
             UpdateTargetState();
-            Controls.AddRange(new Control[] { title, intro, builtInRadio, builtInInfo, customRadio, hint, advancedDiagnosticsBox, autoStartWindowsBox, autoStartMonitoringBox, saveButton, cancelButton });
+            Controls.AddRange(new Control[] { title, intro, builtInRadio, builtInInfo, customRadio, hint, advancedDiagnosticsBox, preventSleepBox, preventShutdownBox, autoStartWindowsBox, autoStartMonitoringBox, languageLabel, languageBox, languageHint, saveButton, cancelButton });
         }
 
         private void UpdateTargetState()
@@ -319,7 +346,8 @@ namespace NetCheck
                     return;
                 }
             }
-            Result = new MonitorTargetSettings { UseCustomTargets = customRadio.Checked, CustomTargets = values, AutoStartWindows = autoStartWindowsBox.Checked, AutoStartMonitoring = autoStartMonitoringBox.Checked, AdvancedDiagnosticsEnabled = advancedDiagnosticsBox.Checked };
+            SelectedLanguage = languageBox.SelectedIndex == 0 ? LanguagePreferenceStore.TraditionalChinese : LanguagePreferenceStore.English;
+            Result = new MonitorTargetSettings { UseCustomTargets = customRadio.Checked, CustomTargets = values, AutoStartWindows = autoStartWindowsBox.Checked, AutoStartMonitoring = autoStartMonitoringBox.Checked, AdvancedDiagnosticsEnabled = advancedDiagnosticsBox.Checked, PreventSleepWhileMonitoring = preventSleepBox.Checked, PreventShutdownWhileMonitoring = preventShutdownBox.Checked };
             DialogResult = DialogResult.OK;
             Close();
         }

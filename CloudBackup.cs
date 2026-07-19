@@ -279,7 +279,7 @@ namespace NetCheck
 
         private static string ApiRequest(string method, string url, string token, string contentType, byte[] body)
         {
-            var request = (HttpWebRequest)WebRequest.Create(url); request.Method = method; request.Timeout = 60000; request.ReadWriteTimeout = 60000; request.UserAgent = "NetCheckMonitor/0.9.5"; request.Headers[HttpRequestHeader.Authorization] = "Bearer " + token;
+            var request = (HttpWebRequest)WebRequest.Create(url); request.Method = method; request.Timeout = 60000; request.ReadWriteTimeout = 60000; request.UserAgent = "NetCheckMonitor/0.9.6"; request.Headers[HttpRequestHeader.Authorization] = "Bearer " + token;
             if (body != null) { request.ContentType = contentType; request.ContentLength = body.Length; using (Stream stream = request.GetRequestStream()) stream.Write(body, 0, body.Length); }
             try { using (var response = (HttpWebResponse)request.GetResponse()) using (var reader = new StreamReader(response.GetResponseStream())) return reader.ReadToEnd(); }
             catch (WebException ex) { throw new InvalidOperationException(ReadWebError(ex)); }
