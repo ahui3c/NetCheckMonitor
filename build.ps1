@@ -21,6 +21,7 @@ $sources = @(
     (Join-Path $root 'Localization.cs'),
     (Join-Path $root 'NetworkStatus.cs'),
     (Join-Path $root 'AdvancedDiagnostics.cs'),
+    (Join-Path $root 'EventNotes.cs'),
     (Join-Path $root 'MonitorSettings.cs'),
     (Join-Path $root 'SessionRecovery.cs'),
     (Join-Path $root 'NetCheck.cs'),
@@ -34,7 +35,7 @@ $parameters.GenerateExecutable = $true
 $parameters.GenerateInMemory = $false
 $parameters.IncludeDebugInformation = $false
 $parameters.OutputAssembly = Join-Path $outDir $outputName
-$parameters.CompilerOptions = "/target:winexe /optimize+ /win32icon:`"$iconPath`""
+$parameters.CompilerOptions = "/target:winexe /optimize+ /codepage:65001 /win32icon:`"$iconPath`""
 $results = $provider.CompileAssemblyFromFile($parameters, [string[]]$sources)
 $provider.Dispose()
 if ($results.Errors.HasErrors) {
