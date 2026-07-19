@@ -54,7 +54,7 @@ try {
     $sessions.Add($session)
     $buildHtml = $archiveType.GetMethod('BuildHtml', [Reflection.BindingFlags]'Static,NonPublic')
     $reportHtml = $buildHtml.Invoke($null, [object[]]@($sessions, [DateTime]::Today, [DateTime]::Today.AddDays(1), $true))
-    $englishReport = $reportHtml.Contains("<html lang='en'>") -and $reportHtml.Contains('Daily Outage Statistics') -and $reportHtml.Contains('Outage Events') -and $reportHtml.Contains('Current Network Adapter') -and $reportHtml.Contains('Wi-Fi Signal') -and -not $reportHtml.Contains('每日斷線統計')
+    $englishReport = $reportHtml.Contains("<html lang='en'>") -and $reportHtml.Contains('Daily Outage Statistics') -and $reportHtml.Contains('Outage Events') -and $reportHtml.Contains('Current Network Adapter') -and $reportHtml.Contains('Wi-Fi Signal') -and $reportHtml.Contains('Complete Daily Test Records') -and $reportHtml.Contains('Full Test Details') -and -not $reportHtml.Contains('每日斷線統計')
     $ok = $main.Text -eq 'NetCheckMonitor Network Monitor' -and
         $mainText.Contains('Start') -and $mainText.Contains('Download PDF Report') -and $mainText.Contains('About') -and $mainText.Contains('Settings') -and $mainText.Contains('v0.9.6') -and
         $about.Text -eq 'About NetCheckMonitor' -and $aboutText.Contains('Version 0.9.6') -and $aboutText.Contains('Scheduled monitoring') -and $aboutText.Contains('廖阿輝') -and $aboutText.Contains('Website:') -and $aboutText.Contains('https://ahui3c.com') -and $aboutText.Contains('GitHub project:') -and $aboutText.Contains('https://github.com/ahui3c/NetCheckMonitor') -and $aboutText.Contains('Check for Updates') -and
