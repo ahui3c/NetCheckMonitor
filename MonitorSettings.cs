@@ -13,13 +13,16 @@ namespace NetCheck
     {
         internal static bool ShouldShowCloseToTrayNotice()
         {
-            try { return !String.Equals(File.ReadAllText(PreferencePath(), Encoding.UTF8).Trim(), "1", StringComparison.Ordinal); }
+            string overridePath = Environment.GetEnvironmentVariable("NETCHECK_UI_STATE");
+            if (String.IsNullOrWhiteSpace(overridePath)) return PortableSettingsStore.LoadCloseNoticeShown() != true;
+            try { return !String.Equals(File.ReadAllText(overridePath, Encoding.UTF8).Trim(), "1", StringComparison.Ordinal); }
             catch { return true; }
         }
 
         internal static void MarkCloseToTrayNoticeShown()
         {
-            string path = PreferencePath();
+            string path = Environment.GetEnvironmentVariable("NETCHECK_UI_STATE");
+            if (String.IsNullOrWhiteSpace(path)) { PortableSettingsStore.SaveCloseNoticeShown(true); return; }
             string directory = Path.GetDirectoryName(path);
             if (!String.IsNullOrEmpty(directory)) Directory.CreateDirectory(directory);
             string temp = path + ".tmp";
@@ -50,12 +53,6 @@ namespace NetCheck
             finally { Environment.SetEnvironmentVariable("NETCHECK_UI_STATE", previous); }
         }
 
-        private static string PreferencePath()
-        {
-            string overridePath = Environment.GetEnvironmentVariable("NETCHECK_UI_STATE");
-            if (!String.IsNullOrWhiteSpace(overridePath)) return overridePath;
-            return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "NetCheck", "Monitor", "ui-state.dat");
-        }
     }
 
     internal sealed class MonitorTargetSettings
@@ -73,12 +70,15 @@ namespace NetCheck
     {
         public static MonitorTargetSettings Load()
         {
-            return LoadFromPath(SettingsPath());
+            string overridePath = Environment.GetEnvironmentVariable("NETCHECK_MONITOR_SETTINGS");
+            return String.IsNullOrWhiteSpace(overridePath) ? NormalizeLoaded(PortableSettingsStore.LoadMonitorSettings(), true) : LoadFromPath(overridePath);
         }
 
         public static void Save(MonitorTargetSettings value)
         {
-            SaveToPath(SettingsPath(), value);
+            string overridePath = Environment.GetEnvironmentVariable("NETCHECK_MONITOR_SETTINGS");
+            if (String.IsNullOrWhiteSpace(overridePath)) PortableSettingsStore.SaveMonitorSettings(value);
+            else SaveToPath(overridePath, value);
         }
 
         internal static string[] GetEffectiveTargets(MonitorTargetSettings settings, string[] builtInTargets)
@@ -157,13 +157,6 @@ namespace NetCheck
                 && normalized;
         }
 
-        private static string SettingsPath()
-        {
-            string overridePath = Environment.GetEnvironmentVariable("NETCHECK_MONITOR_SETTINGS");
-            if (!String.IsNullOrWhiteSpace(overridePath)) return overridePath;
-            return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "NetCheck", "Monitor", "settings.json");
-        }
-
         private static MonitorTargetSettings DefaultSettings()
         {
             return new MonitorTargetSettings { UseCustomTargets = false, CustomTargets = new List<string>(), PreventSleepWhileMonitoring = true };
@@ -177,20 +170,25 @@ namespace NetCheck
                 string json = File.ReadAllText(path, Encoding.UTF8);
                 bool hasSleepSetting = json.IndexOf("\"PreventSleepWhileMonitoring\"", StringComparison.Ordinal) >= 0;
                 var value = new JavaScriptSerializer().Deserialize<MonitorTargetSettings>(json);
-                if (value == null) return DefaultSettings();
-                if (!hasSleepSetting) value.PreventSleepWhileMonitoring = true;
-                if (value.CustomTargets == null) value.CustomTargets = new List<string>();
-                var valid = new List<string>();
-                foreach (string target in value.CustomTargets)
-                {
-                    string normalized, error;
-                    if (valid.Count < 3 && TryNormalizeTarget(target, out normalized, out error) && !ContainsIgnoreCase(valid, normalized)) valid.Add(normalized);
-                }
-                value.CustomTargets = valid;
-                if (value.UseCustomTargets && valid.Count == 0) value.UseCustomTargets = false;
-                return value;
+                return NormalizeLoaded(value, hasSleepSetting);
             }
             catch { return DefaultSettings(); }
+        }
+
+        private static MonitorTargetSettings NormalizeLoaded(MonitorTargetSettings value, bool hasSleepSetting)
+        {
+            if (value == null) return DefaultSettings();
+            if (!hasSleepSetting) value.PreventSleepWhileMonitoring = true;
+            if (value.CustomTargets == null) value.CustomTargets = new List<string>();
+            var valid = new List<string>();
+            foreach (string target in value.CustomTargets)
+            {
+                string normalized, error;
+                if (valid.Count < 3 && TryNormalizeTarget(target, out normalized, out error) && !ContainsIgnoreCase(valid, normalized)) valid.Add(normalized);
+            }
+            value.CustomTargets = valid;
+            if (value.UseCustomTargets && valid.Count == 0) value.UseCustomTargets = false;
+            return value;
         }
 
         private static void SaveToPath(string path, MonitorTargetSettings value)
@@ -231,6 +229,7 @@ namespace NetCheck
         private readonly CheckBox preventSleepBox = new CheckBox();
         private readonly CheckBox preventShutdownBox = new CheckBox();
         private readonly ComboBox languageBox = new ComboBox();
+        private readonly Button exportBackupButton = new Button();
         private readonly Button rebuildDailyReportsButton = new Button();
         private readonly Button saveButton = new Button();
         private readonly Button cancelButton = new Button();
@@ -245,7 +244,7 @@ namespace NetCheck
             rebuildDailyReports = rebuildDailyReportsAction;
             Text = L.T("監控目標設定", "Monitoring Target Settings");
             Font = new Font("Microsoft JhengHei UI", 10F);
-            ClientSize = new Size(620, 625);
+            ClientSize = new Size(620, 665);
             FormBorderStyle = FormBorderStyle.FixedDialog;
             MaximizeBox = false;
             MinimizeBox = false;
@@ -288,15 +287,18 @@ namespace NetCheck
             languageBox.SelectedIndex = L.TraditionalChinese ? 0 : 1;
             var languageHint = new Label { Text = L.T("下次啟動程式時套用", "Applied the next time the app starts"), AutoSize = false, Location = new Point(329, 536), Size = new Size(255, 25), ForeColor = Color.DimGray, Font = new Font(Font.FontFamily, 8.5F) };
 
-            rebuildDailyReportsButton.Text = L.T("強制重新製作每日詳細報表", "Rebuild Daily Detail Reports");
-            rebuildDailyReportsButton.SetBounds(51, 576, 285, 34);
+            exportBackupButton.Text = L.T("匯出全部紀錄備份 ZIP", "Export All Data Backup ZIP");
+            exportBackupButton.SetBounds(51, 576, 260, 34);
+            exportBackupButton.Click += delegate { ExportBackupZip(); };
+            rebuildDailyReportsButton.Text = L.T("強制重製每日詳細報表", "Rebuild Daily Detail Reports");
+            rebuildDailyReportsButton.SetBounds(325, 576, 260, 34);
             rebuildDailyReportsButton.Enabled = rebuildDailyReports != null;
             rebuildDailyReportsButton.Click += delegate { RebuildDailyReports(); };
 
             saveButton.Text = L.T("儲存", "Save");
             cancelButton.Text = L.T("取消", "Cancel");
-            saveButton.SetBounds(352, 580, 110, 30);
-            cancelButton.SetBounds(475, 580, 110, 30);
+            saveButton.SetBounds(352, 620, 110, 30);
+            cancelButton.SetBounds(475, 620, 110, 30);
             cancelButton.DialogResult = DialogResult.Cancel;
             saveButton.Click += delegate { ValidateAndClose(); };
             builtInRadio.CheckedChanged += delegate { UpdateTargetState(); };
@@ -315,7 +317,40 @@ namespace NetCheck
             if (current.CustomTargets != null)
                 for (int i = 0; i < current.CustomTargets.Count && i < targetBoxes.Length; i++) targetBoxes[i].Text = current.CustomTargets[i];
             UpdateTargetState();
-            Controls.AddRange(new Control[] { title, intro, builtInRadio, builtInInfo, customRadio, hint, advancedDiagnosticsBox, preventSleepBox, preventShutdownBox, autoStartWindowsBox, autoStartMonitoringBox, languageLabel, languageBox, languageHint, rebuildDailyReportsButton, saveButton, cancelButton });
+            Controls.AddRange(new Control[] { title, intro, builtInRadio, builtInInfo, customRadio, hint, advancedDiagnosticsBox, preventSleepBox, preventShutdownBox, autoStartWindowsBox, autoStartMonitoringBox, languageLabel, languageBox, languageHint, exportBackupButton, rebuildDailyReportsButton, saveButton, cancelButton });
+        }
+
+        private void ExportBackupZip()
+        {
+            using (var dialog = new SaveFileDialog())
+            {
+                dialog.Title = L.T("匯出全部紀錄備份", "Export All Data Backup");
+                dialog.Filter = L.T("ZIP 壓縮檔 (*.zip)|*.zip", "ZIP archive (*.zip)|*.zip");
+                dialog.DefaultExt = "zip";
+                dialog.AddExtension = true;
+                dialog.FileName = "NetCheckMonitor_Backup_" + BackupFilePart(Environment.MachineName) + "_" + DateTime.Now.ToString("yyyyMMdd_HHmmss") + ".zip";
+                if (dialog.ShowDialog(this) != DialogResult.OK) return;
+                exportBackupButton.Enabled = false;
+                Cursor previous = Cursor;
+                Cursor = Cursors.WaitCursor;
+                try
+                {
+                    int count = ArchiveReport.ExportAllDataZip(dialog.FileName);
+                    MessageBox.Show(L.T("備份完成，共匯出 ", "Backup completed. Exported ") + count + L.T(" 個紀錄檔案。\n\n", " data files.\n\n") + dialog.FileName, exportBackupButton.Text, MessageBoxButtons.OK, MessageBoxIcon.Information);
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show(L.T("無法匯出備份：", "Could not export backup: ") + ex.Message, exportBackupButton.Text, MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
+                finally { Cursor = previous; exportBackupButton.Enabled = true; }
+            }
+        }
+
+        private static string BackupFilePart(string value)
+        {
+            var result = new StringBuilder();
+            foreach (char c in value ?? "PC") if (Char.IsLetterOrDigit(c) || c == '-' || c == '_') result.Append(c);
+            return result.Length == 0 ? "PC" : result.ToString();
         }
 
         private void RebuildDailyReports()

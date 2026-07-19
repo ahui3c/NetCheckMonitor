@@ -18,8 +18,8 @@ using Microsoft.Win32;
 [assembly: AssemblyProduct("NetCheckMonitor")]
 [assembly: AssemblyDescription("Internet connection monitoring and outage reporting")]
 [assembly: AssemblyCompany("廖阿輝")]
-[assembly: AssemblyVersion("0.9.6.0")]
-[assembly: AssemblyFileVersion("0.9.6.0")]
+[assembly: AssemblyVersion("0.9.7.0")]
+[assembly: AssemblyFileVersion("0.9.7.0")]
 
 namespace NetCheck
 {
@@ -301,6 +301,8 @@ namespace NetCheck
             if (!String.IsNullOrEmpty(reportPath)) reportButton.Text = L.T("開啟累積報表", "Open Cumulative Report");
             reportButton.Enabled = !String.IsNullOrEmpty(reportPath);
             monitorSettings = MonitorSettingsStore.Load();
+            if (String.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("NETCHECK_MONITOR_SETTINGS")))
+                try { AutoStartManager.SetEnabled(monitorSettings.AutoStartWindows); } catch { }
             cloudManager = new CloudBackupManager(machineName, machineId);
         }
 
@@ -569,7 +571,7 @@ namespace NetCheck
                                 request.Method = "GET";
                                 request.Timeout = 5000;
                                 request.ReadWriteTimeout = 5000;
-                                request.UserAgent = "NetCheckMonitor/0.9.6";
+                                request.UserAgent = "NetCheckMonitor/0.9.7";
                                 request.AllowAutoRedirect = true;
                                 using (var response = (HttpWebResponse)request.GetResponse())
                                 {
@@ -1607,7 +1609,7 @@ namespace NetCheck
 
     internal sealed class AboutForm : Form
     {
-        internal const string AppVersion = "0.9.6";
+        internal const string AppVersion = "0.9.7";
         internal const string Purpose = "可定時監控對外網路連線，紀錄斷線並產生圖文報表，並支援網路硬碟備份，PDF 下載，程式完全免費開源無廣告。";
         internal const string EnglishPurpose = "Scheduled monitoring of external Internet connectivity, outage logging, graphical reports, cloud-drive backup, and PDF downloads. Completely free, open source, and ad-free.";
         private const string GitHubProjectUrl = "https://github.com/ahui3c/NetCheckMonitor";

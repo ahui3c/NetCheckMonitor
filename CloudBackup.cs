@@ -39,6 +39,7 @@ namespace NetCheck
         private readonly string machineName;
         private readonly string machineId;
         private readonly string settingsPath;
+        private readonly bool portableSettings;
         private readonly System.Threading.Timer scheduleTimer;
         private readonly object sync = new object();
         private CloudConfig config;
@@ -52,8 +53,17 @@ namespace NetCheck
             machineName = computerName;
             machineId = computerId;
             string overridePath = Environment.GetEnvironmentVariable("NETCHECK_CLOUD_SETTINGS");
-            settingsPath = String.IsNullOrEmpty(overridePath) ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "NetCheck", "Cloud", "settings.dat") : overridePath;
+            portableSettings = String.IsNullOrEmpty(overridePath);
+            if (String.IsNullOrEmpty(overridePath)) PortableSettingsStore.EnsureMigration();
+            settingsPath = String.IsNullOrEmpty(overridePath) ? PortableSettingsStore.CloudPath : overridePath;
             config = LoadConfig(settingsPath) ?? NewConfig();
+            if (portableSettings)
+            {
+                string portableSchedule = PortableSettingsStore.LoadCloudBackupSchedule();
+                TimeSpan parsed;
+                if (!String.IsNullOrEmpty(portableSchedule) && TimeSpan.TryParseExact(portableSchedule, @"hh\:mm", CultureInfo.InvariantCulture, out parsed)) config.Schedule = portableSchedule;
+                else PortableSettingsStore.SaveCloudBackupSchedule(config.Schedule);
+            }
             lastStatus = Connected ? L.T("Google Drive 已連接；等待每日備份。", "Google Drive is connected; waiting for the daily backup.") : L.T("尚未連接 Google Drive。", "Google Drive is not connected.");
             scheduleTimer = new System.Threading.Timer(delegate { CheckSchedule(); }, null, 30000, 60000);
         }
@@ -76,12 +86,14 @@ namespace NetCheck
 
         public void SaveSchedule(TimeSpan value)
         {
-            lock (sync) { config.Schedule = value.ToString(@"hh\:mm"); SaveConfig(settingsPath, config); lastStatus = L.T("每日備份時間已設為 ", "Daily backup time set to ") + config.Schedule + "."; }
+            lock (sync) { config.Schedule = value.ToString(@"hh\:mm"); SaveConfig(settingsPath, config); if (portableSettings) PortableSettingsStore.SaveCloudBackupSchedule(config.Schedule); lastStatus = L.T("每日備份時間已設為 ", "Daily backup time set to ") + config.Schedule + "."; }
         }
 
         public void Connect()
         {
             CloudConfig credentials = EmbeddedCredentials();
+            if (String.IsNullOrEmpty(credentials.ClientSecret))
+                throw new InvalidOperationException(L.T("此版本缺少 Google Drive 登入憑證，請更新程式後再試。", "This build is missing its Google Drive sign-in credential. Update the app and try again."));
             OAuthResult result = Authorize(credentials);
             lock (sync)
             {
@@ -164,11 +176,16 @@ namespace NetCheck
             {
                 if (!String.IsNullOrEmpty(accessToken) && DateTime.UtcNow < accessTokenExpires) return accessToken;
                 if (String.IsNullOrEmpty(config.RefreshToken)) throw new InvalidOperationException(L.T("Google Drive 登入已失效，請重新連接。", "The Google Drive sign-in has expired. Reconnect it."));
-                var form = new Dictionary<string, string>();
-                form["client_id"] = config.ClientId;
-                if (!String.IsNullOrEmpty(config.ClientSecret)) form["client_secret"] = config.ClientSecret;
-                form["refresh_token"] = config.RefreshToken;
-                form["grant_type"] = "refresh_token";
+                if (String.IsNullOrEmpty(config.ClientSecret))
+                {
+                    CloudConfig embedded = EmbeddedCredentials();
+                    if (String.Equals(config.ClientId, embedded.ClientId, StringComparison.Ordinal) && !String.IsNullOrEmpty(embedded.ClientSecret))
+                    {
+                        config.ClientSecret = embedded.ClientSecret;
+                        SaveConfig(settingsPath, config);
+                    }
+                }
+                Dictionary<string, string> form = BuildRefreshTokenForm(config);
                 Dictionary<string, object> json = JsonObject(PostForm(String.IsNullOrEmpty(config.TokenUri) ? "https://oauth2.googleapis.com/token" : config.TokenUri, form));
                 accessToken = GetString(json, "access_token");
                 int seconds = GetInt(json, "expires_in", 3600);
@@ -248,7 +265,7 @@ namespace NetCheck
                 if (!query.ContainsKey("state") || query["state"] != state) throw new InvalidOperationException(L.T("Google 登入狀態驗證失敗。", "Google sign-in state validation failed."));
                 if (query.ContainsKey("error")) throw new InvalidOperationException(L.T("Google 登入未完成：", "Google sign-in was not completed: ") + query["error"]);
                 if (!query.ContainsKey("code")) throw new InvalidOperationException(L.T("Google 未回傳授權碼。", "Google did not return an authorization code."));
-                var form = new Dictionary<string, string>(); form["code"] = query["code"]; form["client_id"] = credentials.ClientId; if (!String.IsNullOrEmpty(credentials.ClientSecret)) form["client_secret"] = credentials.ClientSecret; form["redirect_uri"] = redirect; form["grant_type"] = "authorization_code"; form["code_verifier"] = verifier;
+                Dictionary<string, string> form = BuildAuthorizationCodeForm(credentials, query["code"], redirect, verifier);
                 Dictionary<string, object> token = JsonObject(PostForm(String.IsNullOrEmpty(credentials.TokenUri) ? "https://oauth2.googleapis.com/token" : credentials.TokenUri, form));
                 var result = new OAuthResult { AccessToken = GetString(token, "access_token"), RefreshToken = GetString(token, "refresh_token"), ExpiresIn = GetInt(token, "expires_in", 3600) };
                 if (String.IsNullOrEmpty(result.RefreshToken)) throw new InvalidOperationException(L.T("Google 未提供離線 refresh token，請移除既有授權後重新登入。", "Google did not provide an offline refresh token. Remove the existing authorization and sign in again."));
@@ -259,7 +276,37 @@ namespace NetCheck
 
         private static CloudConfig EmbeddedCredentials()
         {
-            return new CloudConfig { ClientId = EmbeddedClientId, AuthUri = GoogleAuthUri, TokenUri = GoogleTokenUri, Schedule = "23:55" };
+            return new CloudConfig { ClientId = EmbeddedClientId, ClientSecret = GoogleOAuthBuildSecrets.ClientSecret, AuthUri = GoogleAuthUri, TokenUri = GoogleTokenUri, Schedule = "23:55" };
+        }
+
+        private static Dictionary<string, string> BuildAuthorizationCodeForm(CloudConfig credentials, string code, string redirect, string verifier)
+        {
+            var form = new Dictionary<string, string>();
+            form["code"] = code;
+            form["client_id"] = credentials.ClientId;
+            if (!String.IsNullOrEmpty(credentials.ClientSecret)) form["client_secret"] = credentials.ClientSecret;
+            form["redirect_uri"] = redirect;
+            form["grant_type"] = "authorization_code";
+            form["code_verifier"] = verifier;
+            return form;
+        }
+
+        private static Dictionary<string, string> BuildRefreshTokenForm(CloudConfig credentials)
+        {
+            var form = new Dictionary<string, string>();
+            form["client_id"] = credentials.ClientId;
+            if (!String.IsNullOrEmpty(credentials.ClientSecret)) form["client_secret"] = credentials.ClientSecret;
+            form["refresh_token"] = credentials.RefreshToken;
+            form["grant_type"] = "refresh_token";
+            return form;
+        }
+
+        public static bool RunOAuthRequestSelfTest()
+        {
+            var credentials = new CloudConfig { ClientId = "test-client", ClientSecret = "test-secret", RefreshToken = "test-refresh" };
+            Dictionary<string, string> code = BuildAuthorizationCodeForm(credentials, "test-code", "http://127.0.0.1/", "test-verifier");
+            Dictionary<string, string> refresh = BuildRefreshTokenForm(credentials);
+            return code["client_secret"] == "test-secret" && code["code_verifier"] == "test-verifier" && refresh["client_secret"] == "test-secret" && refresh["refresh_token"] == "test-refresh";
         }
 
         private static CloudConfig NewConfig() { return new CloudConfig { Schedule = "23:55" }; }
@@ -279,7 +326,7 @@ namespace NetCheck
 
         private static string ApiRequest(string method, string url, string token, string contentType, byte[] body)
         {
-            var request = (HttpWebRequest)WebRequest.Create(url); request.Method = method; request.Timeout = 60000; request.ReadWriteTimeout = 60000; request.UserAgent = "NetCheckMonitor/0.9.6"; request.Headers[HttpRequestHeader.Authorization] = "Bearer " + token;
+            var request = (HttpWebRequest)WebRequest.Create(url); request.Method = method; request.Timeout = 60000; request.ReadWriteTimeout = 60000; request.UserAgent = "NetCheckMonitor/0.9.7"; request.Headers[HttpRequestHeader.Authorization] = "Bearer " + token;
             if (body != null) { request.ContentType = contentType; request.ContentLength = body.Length; using (Stream stream = request.GetRequestStream()) stream.Write(body, 0, body.Length); }
             try { using (var response = (HttpWebResponse)request.GetResponse()) using (var reader = new StreamReader(response.GetResponseStream())) return reader.ReadToEnd(); }
             catch (WebException ex) { throw new InvalidOperationException(ReadWebError(ex)); }

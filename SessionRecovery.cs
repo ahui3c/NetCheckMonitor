@@ -125,7 +125,8 @@ namespace NetCheck
         {
             string path = Environment.GetEnvironmentVariable("NETCHECK_SESSION_STATE");
             if (!String.IsNullOrWhiteSpace(path)) return path;
-            return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "NetCheck", "Monitor", "active-session.json");
+            PortableSettingsStore.EnsureMigration();
+            return PortableSettingsStore.SessionPath;
         }
     }
 

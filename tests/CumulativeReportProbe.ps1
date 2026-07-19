@@ -30,6 +30,7 @@ try {
     $archiveType = $assembly.GetType('NetCheck.ArchiveReport', $true)
     $writeReport = $archiveType.GetMethod('WriteCumulativeHtml', [Reflection.BindingFlags]'Static,Public')
     $forceDailyReports = $archiveType.GetMethod('ForceRebuildDailyDetailReports', [Reflection.BindingFlags]'Static,Public')
+    $exportBackup = $archiveType.GetMethod('ExportAllDataZip', [Reflection.BindingFlags]'Static,Public')
     $ensureReport = $archiveType.GetMethod('EnsureCumulativeHtml', [Reflection.BindingFlags]'Static,Public')
     $clearData = $archiveType.GetMethod('ClearAllData', [Reflection.BindingFlags]'Static,Public')
 
@@ -77,6 +78,14 @@ try {
         $forceDailyReports.Invoke($null, $forceArgs) | Out-Null
         $forceRebuilt = (Get-Item -LiteralPath $firstDaily[0].FullName).LastWriteTime.Year -gt 2000
     }
+    $backupZip = Join-Path $testRoot 'AllDataBackup.zip'
+    $backupExtract = Join-Path $testRoot 'BackupExtract'
+    $backupCount = [int]$exportBackup.Invoke($null, [object[]]@([string]$backupZip))
+    Expand-Archive -LiteralPath $backupZip -DestinationPath $backupExtract -Force
+    $backupFiles = @(Get-ChildItem -LiteralPath $backupExtract -File -Recurse)
+    $backupExported = $backupCount -ge 4 -and $backupFiles.Name.Contains('Backup_Manifest.txt') -and @($backupFiles | Where-Object Extension -eq '.csv').Count -ge 2 -and @($backupFiles | Where-Object Extension -eq '.html').Count -ge 2
+    Remove-Item -LiteralPath $backupZip -Force
+    Remove-Item -LiteralPath $backupExtract -Recurse -Force
 
     $clearArgs = [object[]]@(0)
     $failures = $clearData.Invoke($null, $clearArgs)
@@ -84,8 +93,8 @@ try {
     $writeReport.Invoke($null, $writeArgs) | Out-Null
     $emptyAfterClear = [IO.File]::ReadAllText($report).Contains('目前沒有有效的監控檢查資料')
 
-    if (-not ($firstGeneration -and $historyCombined -and $gapsExcluded -and $readableScreenText -and $newestTimelineFirst -and $timelineRunsRightToLeft -and $twoLineTimelineLayout -and $combinedEventTable -and $timelineNoteAndHover -and $outagesBeforeDiagnostics -and $dateColorGrouping -and $summaryUsesDailyLinks -and $detailReportComplete -and $detailNewestFirst -and $cachePreserved -and $forceRebuilt -and $cleared -and $emptyAfterClear)) { throw 'Cumulative report probe failed.' }
-    Write-Output 'Cumulative summary links, daily detail cache/rebuild, full details, gap exclusion, and clear-data reset passed.'
+    if (-not ($firstGeneration -and $historyCombined -and $gapsExcluded -and $readableScreenText -and $newestTimelineFirst -and $timelineRunsRightToLeft -and $twoLineTimelineLayout -and $combinedEventTable -and $timelineNoteAndHover -and $outagesBeforeDiagnostics -and $dateColorGrouping -and $summaryUsesDailyLinks -and $detailReportComplete -and $detailNewestFirst -and $cachePreserved -and $forceRebuilt -and $backupExported -and $cleared -and $emptyAfterClear)) { throw 'Cumulative report probe failed.' }
+    Write-Output 'Cumulative links, daily cache/rebuild, ZIP backup export, gap exclusion, and clear-data reset passed.'
 }
 finally {
     $resolvedRoot = [IO.Path]::GetFullPath($testRoot)

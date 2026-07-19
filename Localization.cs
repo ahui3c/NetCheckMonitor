@@ -16,7 +16,9 @@ namespace NetCheck
             string testOverride = Environment.GetEnvironmentVariable("NETCHECK_UI_LANGUAGE");
             string normalized = Normalize(testOverride);
             if (normalized != null) return normalized;
-            try { return Normalize(File.ReadAllText(PreferencePath(), Encoding.UTF8).Trim()); }
+            string overridePath = Environment.GetEnvironmentVariable("NETCHECK_UI_LANGUAGE_FILE");
+            if (String.IsNullOrWhiteSpace(overridePath)) return Normalize(PortableSettingsStore.LoadLanguage());
+            try { return Normalize(File.ReadAllText(overridePath, Encoding.UTF8).Trim()); }
             catch { return null; }
         }
 
@@ -24,7 +26,8 @@ namespace NetCheck
         {
             string normalized = Normalize(language);
             if (normalized == null) throw new ArgumentException("Unsupported interface language.", "language");
-            string path = PreferencePath();
+            string path = Environment.GetEnvironmentVariable("NETCHECK_UI_LANGUAGE_FILE");
+            if (String.IsNullOrWhiteSpace(path)) { PortableSettingsStore.SaveLanguage(normalized); return; }
             string directory = Path.GetDirectoryName(path);
             if (!String.IsNullOrEmpty(directory)) Directory.CreateDirectory(directory);
             string temp = path + ".tmp";
@@ -76,12 +79,6 @@ namespace NetCheck
             }
         }
 
-        private static string PreferencePath()
-        {
-            string overridePath = Environment.GetEnvironmentVariable("NETCHECK_UI_LANGUAGE_FILE");
-            if (!String.IsNullOrWhiteSpace(overridePath)) return overridePath;
-            return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "NetCheck", "Monitor", "language.dat");
-        }
     }
 
     internal static class L

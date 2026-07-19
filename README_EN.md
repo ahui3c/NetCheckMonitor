@@ -6,16 +6,15 @@
 
 NetCheckMonitor is a free, open-source, ad-free Windows utility that periodically checks whether a computer can reach the public Internet. It records outages over hours or days and creates graphical HTML and PDF reports suitable for troubleshooting home Internet service or documenting connection problems for an ISP.
 
-Current version: **0.9.6**
+Current version: **0.9.7**
 
-## What's new in 0.9.6
+## What's new in 0.9.7
 
-- Added options to prevent Windows sleep while monitoring and optionally block Windows shutdown/restart.
-- Replaced automatic system-language detection with a first-launch Traditional Chinese/English choice that can be changed later in Settings.
-- Added timestamped event notes and quick entries for tracking equipment restarts, weather, and other troubleshooting actions alongside outages.
-- Refined cumulative HTML/PDF reports, 24-hour timelines, integrated events, hover details, ordering, text sizing, and table readability.
+- Fixed the Google Drive sign-in failure that reported `client_secret is missing` after browser authorization while retaining PKCE and the limited `drive.file` scope.
+- Moved application settings to a portable file beside the executable, with one-time background migration from previous versions.
+- Added **Export All Data Backup ZIP** in Settings to package raw CSV data and HTML/PDF reports for download.
 
-See the complete [0.9.6 release notes](docs/RELEASE_NOTES_0.9.6.md).
+See the complete [0.9.7 release notes](docs/RELEASE_NOTES_0.9.7.md).
 
 ## Download
 
@@ -32,7 +31,7 @@ See the complete [0.9.6 release notes](docs/RELEASE_NOTES_0.9.6.md).
 - The system tray icon shows live status while monitoring: green for online, red for a confirmed outage, orange while checking, and gray while paused.
 - The main window shows the current adapter, connection type (wired/Wi-Fi/VPN), and Wi-Fi signal percentage. Adapter changes are recorded in the raw log and reports.
 - **Settings** switches between the built-in targets and up to three custom websites or IP addresses, tried in order until one succeeds.
-- Custom settings are saved for the current Windows user. Changing targets while monitoring starts a separate session so one report cannot mix target definitions.
+- Application settings are stored in a portable file beside the executable. Changing targets while monitoring starts a separate session so one report cannot mix target definitions.
 - Settings remain available while monitoring. If the targets change, the current session and report are saved safely before monitoring restarts automatically with the new targets.
 - Optional advanced layered diagnostics run only after an HTTPS failure and check the adapter, gateway, DNS, IPv4, IPv6, HTTPS target, and Wi-Fi signal. This setting never changes outage detection, duration, or percentage statistics.
 - Supports Traditional Chinese and English. The user chooses the interface language on first launch and can change it later in Settings.
@@ -71,7 +70,7 @@ See the complete [English user guide](docs/User_Guide_EN.md).
 2. Select **Sign in to Google Drive** and authorize your own Google account in the system browser.
 3. Set the daily backup time.
 
-Users do not need to create a Google Cloud project or download credential files. The app uses a Desktop OAuth client ID with PKCE and embeds no client secret in source or binaries. It requests only the `drive.file` scope, and Windows DPAPI encrypts the refresh token for the current Windows account.
+Users do not need to create a Google Cloud project or download credential files. The app uses a Desktop OAuth client ID with PKCE; the installed-app credential required by Google is injected only during release builds and is not committed to the public source. It requests only the `drive.file` scope, and Windows DPAPI encrypts the refresh token for the current Windows account.
 
 ## Data and privacy
 

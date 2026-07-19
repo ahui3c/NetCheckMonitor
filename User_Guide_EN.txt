@@ -1,7 +1,7 @@
 NetCheckMonitor Network Connection Monitor (Portable Windows Edition)
 ===================================================================
 
-Version 0.9.6
+Version 0.9.7
 
 Interface language
 - On first launch, choose Traditional Chinese or English. The choice is saved and the prompt is not shown again.
@@ -33,7 +33,7 @@ Monitoring target settings
 - Custom mode accepts up to three websites or IP addresses in order; the first success marks the check online.
 - Enter https://example.com/status, example.com, or an IP such as 1.1.1.1. Without a scheme, websites use HTTPS and IPs use HTTP.
 - Only HTTP / HTTPS are accepted. Blank, malformed, duplicate, or credential-containing targets cannot be saved.
-- Settings are stored in %LOCALAPPDATA%\NetCheck\Monitor\settings.json for the current Windows user.
+- Settings are stored in NetCheckMonitor.settings.json beside the executable for portability; previous AppData settings are migrated once automatically.
 - Start after Windows sign-in and Start monitoring automatically when the app opens are separate options. Unfinished-session recovery is handled first.
 - Startup checks for an existing NetCheckMonitor instance. A duplicate launch shows the existing window instead of starting another monitoring process.
 - Settings remain available while monitoring. Target changes save the current session and report before monitoring restarts automatically; startup-option-only changes do not interrupt monitoring.

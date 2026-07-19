@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.Drawing;
 using System.Globalization;
 using System.IO;
+using System.IO.Compression;
 using System.Net;
 using System.Text;
 using System.Threading;
@@ -335,6 +336,60 @@ namespace NetCheck
                 int count = reader.Read(buffer, 0, buffer.Length);
                 return count > 0 && new string(buffer, 0, count).IndexOf(marker, StringComparison.Ordinal) >= 0;
             }
+        }
+
+        public static int ExportAllDataZip(string outputPath)
+        {
+            List<string> files = GetManagedFiles();
+            if (files.Count == 0) throw new InvalidOperationException(L.T("目前沒有可匯出的監控紀錄資料。", "There is currently no monitoring data to export."));
+            string directory = Path.GetDirectoryName(outputPath);
+            if (String.IsNullOrEmpty(directory)) directory = Directory.GetCurrentDirectory();
+            Directory.CreateDirectory(directory);
+            string temp = Path.Combine(directory, ".NetCheckMonitor_Backup_" + Guid.NewGuid().ToString("N") + ".tmp");
+            int count = 0;
+            var usedNames = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            var manifest = new List<string>();
+            try
+            {
+                using (var archiveStream = new FileStream(temp, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None))
+                using (var archive = new ZipArchive(archiveStream, ZipArchiveMode.Create, false))
+                {
+                    foreach (string file in files)
+                    {
+                        if (!File.Exists(file)) continue;
+                        string extension = Path.GetExtension(file).ToLowerInvariant();
+                        string folder = extension == ".csv" ? "CSV_Raw_Data" : (extension == ".pdf" ? "PDF_Reports" : "HTML_Reports");
+                        string baseName = Path.GetFileName(file);
+                        string candidate = folder + "/" + baseName;
+                        int duplicate = 1;
+                        while (usedNames.ContainsKey(candidate))
+                        {
+                            duplicate++;
+                            candidate = folder + "/" + Path.GetFileNameWithoutExtension(baseName) + "_copy" + duplicate + extension;
+                        }
+                        usedNames[candidate] = 1;
+                        ZipArchiveEntry entry = archive.CreateEntry(candidate, CompressionLevel.Optimal);
+                        using (var source = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
+                        using (Stream target = entry.Open()) source.CopyTo(target);
+                        manifest.Add(candidate + "\t" + new FileInfo(file).Length + " bytes");
+                        count++;
+                    }
+                    if (count == 0) throw new InvalidOperationException(L.T("監控紀錄檔案已不存在或無法讀取。", "The monitoring files no longer exist or could not be read."));
+                    ZipArchiveEntry manifestEntry = archive.CreateEntry("Backup_Manifest.txt", CompressionLevel.Optimal);
+                    using (var writer = new StreamWriter(manifestEntry.Open(), new UTF8Encoding(true)))
+                    {
+                        writer.WriteLine("NetCheckMonitor 0.9.7");
+                        writer.WriteLine("Exported: " + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss zzz"));
+                        writer.WriteLine("Computer: " + Environment.MachineName);
+                        writer.WriteLine("Files: " + count);
+                        writer.WriteLine();
+                        foreach (string line in manifest) writer.WriteLine(line);
+                    }
+                }
+                File.Copy(temp, outputPath, true);
+                return count;
+            }
+            finally { try { if (File.Exists(temp)) File.Delete(temp); } catch { } }
         }
 
         public static string[] ExportDailyArtifacts(string outputDirectory, string machineName, string machineId, DateTime day)
