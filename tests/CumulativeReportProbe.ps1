@@ -58,6 +58,10 @@ try {
     $timelineNoteAndHover = $combinedHtml.Contains("fill='#8e44ad'") -and $combinedHtml.Contains("class='timeline-hit'") -and $combinedHtml.Contains('事件註記｜Manual note for SECOND-PC') -and $combinedHtml.Contains('確認斷線｜Confirmed failure')
     $outagesBeforeDiagnostics = $combinedHtml.IndexOf("<div class='card'><h2>斷線事件與事件註記</h2>", [StringComparison]::Ordinal) -lt $combinedHtml.IndexOf("<div class='card'><h2>進階分層連線診斷</h2>", [StringComparison]::Ordinal)
     $dateColorGrouping = $combinedHtml.Contains("<tr class='date-shade-0'>") -and $combinedHtml.Contains("<tr class='date-shade-1'>") -and $combinedHtml.Contains('.date-shade-0 td{background:#f5f9ff}')
+    $detailHeading = "<div class='card detail-report'><h2>每日完整測試記錄</h2>"
+    $detailReportLast = $combinedHtml.Contains($detailHeading) -and $combinedHtml.IndexOf($detailHeading, [StringComparison]::Ordinal) -gt $combinedHtml.IndexOf("<div class='card'><h2>進階分層連線診斷</h2>", [StringComparison]::Ordinal)
+    $detailReportComplete = $combinedHtml.Contains('完整測試內容') -and $combinedHtml.Contains('https://example.com/') -and $combinedHtml.Contains('疑似斷線／快速複查') -and $combinedHtml.Contains('Confirmed failure') -and $combinedHtml.Contains('Recovered')
+    $detailNewestFirst = $combinedHtml.IndexOf("<section class='detail-day'><h3>2026/07/03", [StringComparison]::Ordinal) -lt $combinedHtml.IndexOf("<section class='detail-day'><h3>2026/07/01", [StringComparison]::Ordinal) -and $combinedHtml.IndexOf('>11:03:00</td>', [StringComparison]::Ordinal) -lt $combinedHtml.IndexOf('>11:01:00</td>', [StringComparison]::Ordinal)
 
     $clearArgs = [object[]]@(0)
     $failures = $clearData.Invoke($null, $clearArgs)
@@ -65,8 +69,8 @@ try {
     $writeReport.Invoke($null, $writeArgs) | Out-Null
     $emptyAfterClear = [IO.File]::ReadAllText($report).Contains('目前沒有有效的監控檢查資料')
 
-    if (-not ($firstGeneration -and $historyCombined -and $gapsExcluded -and $readableScreenText -and $newestTimelineFirst -and $timelineRunsRightToLeft -and $twoLineTimelineLayout -and $combinedEventTable -and $timelineNoteAndHover -and $outagesBeforeDiagnostics -and $dateColorGrouping -and $cleared -and $emptyAfterClear)) { throw 'Cumulative report probe failed.' }
-    Write-Output 'Cumulative history, gap exclusion, empty-session exclusion, and clear-data reset passed.'
+    if (-not ($firstGeneration -and $historyCombined -and $gapsExcluded -and $readableScreenText -and $newestTimelineFirst -and $timelineRunsRightToLeft -and $twoLineTimelineLayout -and $combinedEventTable -and $timelineNoteAndHover -and $outagesBeforeDiagnostics -and $dateColorGrouping -and $detailReportLast -and $detailReportComplete -and $detailNewestFirst -and $cleared -and $emptyAfterClear)) { throw 'Cumulative report probe failed.' }
+    Write-Output 'Cumulative history, daily detailed records, gap exclusion, empty-session exclusion, and clear-data reset passed.'
 }
 finally {
     $resolvedRoot = [IO.Path]::GetFullPath($testRoot)

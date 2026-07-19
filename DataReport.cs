@@ -126,7 +126,7 @@ namespace NetCheck
 
     internal static class ArchiveReport
     {
-        private sealed class Record { public DateTime Time; public bool Online; public string Status; public long Latency; public string Detail; }
+        private sealed class Record { public DateTime Time; public bool Online; public string Status; public long Latency; public string Target; public string Detail; }
         private sealed class Period { public DateTime Start; public DateTime End; }
         private sealed class Outage { public DateTime Start; public DateTime End; public int Count; public string Machine; public TimeSpan Duration; }
         private sealed class ReportEvent { public bool IsNote; public DateTime Time; public DateTime End; public string Machine; public string Text; public TimeSpan Duration; public int Count; }
@@ -388,7 +388,7 @@ namespace NetCheck
                     {
                         long latency;
                         Int64.TryParse(f[3], out latency);
-                        session.Records.Add(new Record { Time = time, Online = status == "ONLINE", Status = status, Latency = latency, Detail = detail });
+                        session.Records.Add(new Record { Time = time, Online = status == "ONLINE", Status = status, Latency = latency, Target = f[4], Detail = detail });
                         if (session.Start == DateTime.MaxValue) session.Start = time;
                     }
                 }
@@ -510,7 +510,7 @@ namespace NetCheck
                 return byDay != 0 ? byDay : String.Compare(a.MachineName, b.MachineName, StringComparison.OrdinalIgnoreCase);
             });
             var sb = new StringBuilder();
-            sb.Append("<!doctype html><html lang='" + L.HtmlLanguage + "'><head><meta charset='utf-8'><title>" + H(L.T("對外網路連線能力累積監控報表", "NetCheckMonitor Cumulative Network Monitoring Report")) + "</title><style>@page{size:A4 landscape;margin:10mm}*{-webkit-print-color-adjust:exact;print-color-adjust:exact;box-sizing:border-box}body{font-family:'Microsoft JhengHei UI','Segoe UI',sans-serif;color:#17202a;font-size:11px;margin:0}h1{font-size:24px;margin:0 0 5px}h2{font-size:16px;margin:0 0 10px}.sub{color:#59636e;margin-bottom:12px}.card{border:1px solid #dfe4e8;border-radius:7px;padding:12px;margin:0 0 12px;page-break-inside:avoid}.grid{display:grid;grid-template-columns:repeat(6,1fr);gap:7px}.metric{background:#f3f6f8;border-left:4px solid #2e86c1;padding:8px}.metric b{display:block;font-size:17px;margin-top:3px}.bad{color:#b03a2e}.good{color:#1e8449}table{border-collapse:collapse;width:100%;font-size:10px}th,td{padding:6px;border-bottom:1px solid #e5e7e9;text-align:left;vertical-align:middle}th{background:#f3f6f8}tr{page-break-inside:avoid}.timeline-chart{width:100%}.timeline-chart svg{display:block;width:100%;height:22px;background:#eef1f3}.timeline-axis{display:flex;justify-content:space-between;width:100%;font-size:8px;color:#657}.timeline-row td{padding-top:3px;padding-bottom:12px}.timeline-indent{margin-left:42px;margin-right:12px}.timeline-hit{fill:transparent;cursor:help;pointer-events:all}.date-shade-0 td{background:#f5f9ff}.date-shade-1 td{background:#fff9f0}.date-shade-2 td{background:#f3faf5}.date-shade-3 td{background:#fbf5fa}.event-badge{display:inline-block;border-radius:10px;padding:2px 7px;font-weight:bold;white-space:nowrap}.event-outage{background:#fde8e6;color:#a93226}.event-note{background:#f1e6f7;color:#6c3483}.legend{font-size:9px;color:#657}.foot{font-size:9px;color:#657;margin-top:8px}</style></head><body>");
+            sb.Append("<!doctype html><html lang='" + L.HtmlLanguage + "'><head><meta charset='utf-8'><title>" + H(L.T("對外網路連線能力累積監控報表", "NetCheckMonitor Cumulative Network Monitoring Report")) + "</title><style>@page{size:A4 landscape;margin:10mm}*{-webkit-print-color-adjust:exact;print-color-adjust:exact;box-sizing:border-box}body{font-family:'Microsoft JhengHei UI','Segoe UI',sans-serif;color:#17202a;font-size:11px;margin:0}h1{font-size:24px;margin:0 0 5px}h2{font-size:16px;margin:0 0 10px}.sub{color:#59636e;margin-bottom:12px}.card{border:1px solid #dfe4e8;border-radius:7px;padding:12px;margin:0 0 12px;page-break-inside:avoid}.grid{display:grid;grid-template-columns:repeat(6,1fr);gap:7px}.metric{background:#f3f6f8;border-left:4px solid #2e86c1;padding:8px}.metric b{display:block;font-size:17px;margin-top:3px}.bad{color:#b03a2e}.good{color:#1e8449}table{border-collapse:collapse;width:100%;font-size:10px}th,td{padding:6px;border-bottom:1px solid #e5e7e9;text-align:left;vertical-align:middle}th{background:#f3f6f8}tr{page-break-inside:avoid}.timeline-chart{width:100%}.timeline-chart svg{display:block;width:100%;height:22px;background:#eef1f3}.timeline-axis{display:flex;justify-content:space-between;width:100%;font-size:8px;color:#657}.timeline-row td{padding-top:3px;padding-bottom:12px}.timeline-indent{margin-left:42px;margin-right:12px}.timeline-hit{fill:transparent;cursor:help;pointer-events:all}.date-shade-0 td{background:#f5f9ff}.date-shade-1 td{background:#fff9f0}.date-shade-2 td{background:#f3faf5}.date-shade-3 td{background:#fbf5fa}.event-badge{display:inline-block;border-radius:10px;padding:2px 7px;font-weight:bold;white-space:nowrap}.event-outage{background:#fde8e6;color:#a93226}.event-note{background:#f1e6f7;color:#6c3483}.legend{font-size:9px;color:#657}.foot{font-size:9px;color:#657;margin-top:8px}.detail-report{page-break-inside:auto}.detail-day{margin-top:14px}.detail-day h3{font-size:13px;margin:0;padding:7px 9px;background:#eaf2f8;border-left:4px solid #2e86c1}.detail-status{font-weight:bold;white-space:nowrap}.detail-target{word-break:break-all}@media print{.detail-day{page-break-before:always}.detail-day:first-of-type{page-break-before:auto}}</style></head><body>");
             sb.Append("<h1>" + H(L.T("對外網路連線能力累積監控報表", "NetCheckMonitor Cumulative Network Monitoring Report")) + "</h1><div class='sub'>" + H(L.T("資料範圍：", "Date range: ")) + start.ToString("yyyy/MM/dd") + " - " + endExclusive.AddDays(-1).ToString("yyyy/MM/dd") + L.T("｜產生時間：", " | Generated: ") + DateTime.Now.ToString("yyyy/MM/dd HH:mm:ss") + L.T("｜來源檔案：", " | Source files: ") + sourceFiles + "</div>");
             sb.Append("<div class='card grid'>");
             Metric(sb, L.T("電腦數", "Computers"), machines.Count.ToString(), ""); Metric(sb, L.T("有效監控", "Effective Monitoring"), Dur(effectiveTotal), ""); Metric(sb, L.T("估計斷線", "Estimated Outage"), Dur(outageTotal), outageTotal > TimeSpan.Zero ? "bad" : "good"); Metric(sb, L.T("時間斷線率", "Time Outage Rate"), timeOutagePercent.ToString("0.00") + "%", timeOutagePercent > 0 ? "bad" : "good"); Metric(sb, L.T("檢查連線率", "Check Availability"), availability.ToString("0.00") + "%", availability >= 99 ? "good" : "bad"); Metric(sb, L.T("平均延遲", "Average Latency"), (latencyCount == 0 ? 0 : latencyTotal / latencyCount) + " ms", "");
@@ -534,6 +534,7 @@ namespace NetCheck
             sb.Append("</tbody></table></div>");
             AppendOutageAndNoteTable(sb, selectedOutages, sessions, start, endExclusive);
             AppendDiagnosticTable(sb, sessions, start, endExclusive);
+            AppendDetailedTestRecords(sb, dailyRows);
             sb.Append("<div class='foot'>" + H(L.T("首次失敗會在 5 秒後快速複查，連續失敗才確認斷線。暫停、程式中斷、電腦關機、程式未執行，以及沒有任何檢查紀錄的日期或工作階段，都不列入有效監控時間及斷線百分比。進階診斷的開關不影響斷線判定與統計；關閉期間的失敗會標示為未執行進階診斷。", "The first failure triggers a fast retry after 5 seconds, and only consecutive failures confirm an outage. Paused, interrupted, powered-off, app-not-running, and no-check dates or sessions are excluded from effective monitoring time and outage percentage. Enabling or disabling advanced diagnostics does not change outage detection or statistics; failures recorded while disabled are marked as not diagnosed.")) + "</div></body></html>");
             return sb.ToString();
         }
@@ -590,6 +591,29 @@ namespace NetCheck
                     sb.Append("<tr class='date-shade-" + shade + "'><td>" + H(item.Key) + "</td><td>" + record.Time.ToString("yyyy/MM/dd HH:mm:ss") + "</td><td>" + H(finding) + "</td><td>" + H(AdvancedDiagnosticResult.EvidenceFromLog(record.Detail)) + "</td></tr>");
                 }
                 sb.Append("</table>");
+            }
+            sb.Append("</div>");
+        }
+
+        private static void AppendDetailedTestRecords(StringBuilder sb, List<Daily> dailyRows)
+        {
+            sb.Append("<div class='card detail-report'><h2>" + H(L.T("每日完整測試記錄", "Complete Daily Test Records")) + "</h2><div class='legend'>" + H(L.T("以下依日期列出每一次實際執行的連線檢查；日期與時間均為最新在上。暫停或沒有執行檢查的時段不會產生資料列。", "Every connectivity check that actually ran is listed below by date, with newest dates and times first. Paused periods and periods without a check do not create rows.")) + "</div>");
+            foreach (Daily daily in dailyRows)
+            {
+                var records = new List<Record>(daily.Records);
+                records.Sort(delegate (Record a, Record b) { return b.Time.CompareTo(a.Time); });
+                if (records.Count == 0) continue;
+                sb.Append("<section class='detail-day'><h3>" + daily.Day.ToString("yyyy/MM/dd") + "　" + H(daily.MachineName + " [" + daily.MachineId + "]") + L.T("　共 ", " | ") + records.Count + H(L.T(" 筆檢查", " checks")) + "</h3>");
+                sb.Append("<table><thead><tr><th>" + H(L.T("時間", "Time")) + "</th><th>" + H(L.T("測試結果", "Result")) + "</th><th>" + H(L.T("回應時間", "Latency")) + "</th><th>" + H(L.T("測試目標", "Test Target")) + "</th><th>" + H(L.T("完整測試內容", "Full Test Details")) + "</th></tr></thead><tbody>");
+                foreach (Record record in records)
+                {
+                    string status = String.IsNullOrEmpty(record.Status) ? (record.Online ? "ONLINE" : "OFFLINE") : record.Status;
+                    string label = status == "ONLINE" ? L.T("正常", "Online") : (status == "SUSPECTED" ? L.T("疑似斷線／快速複查", "Suspected outage / fast retry") : L.T("確認斷線", "Confirmed outage"));
+                    string cls = status == "ONLINE" ? "good" : "bad";
+                    string latency = status == "ONLINE" ? record.Latency + " ms" : "—";
+                    sb.Append("<tr><td>" + record.Time.ToString("HH:mm:ss") + "</td><td class='detail-status " + cls + "'>" + H(label) + "</td><td>" + H(latency) + "</td><td class='detail-target'>" + H(record.Target) + "</td><td>" + H(record.Detail) + "</td></tr>");
+                }
+                sb.Append("</tbody></table></section>");
             }
             sb.Append("</div>");
         }
