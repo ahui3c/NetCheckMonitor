@@ -18,8 +18,8 @@ using Microsoft.Win32;
 [assembly: AssemblyProduct("NetCheckMonitor")]
 [assembly: AssemblyDescription("Internet connection monitoring and outage reporting")]
 [assembly: AssemblyCompany("廖阿輝")]
-[assembly: AssemblyVersion("0.9.7.0")]
-[assembly: AssemblyFileVersion("0.9.7.0")]
+[assembly: AssemblyVersion("0.9.8.0")]
+[assembly: AssemblyFileVersion("0.9.8.0")]
 
 namespace NetCheck
 {
@@ -98,12 +98,9 @@ namespace NetCheck
         private readonly Label networkInfoLabel = new Label();
         private readonly Button startButton = new Button();
         private readonly Button pauseButton = new Button();
-        private readonly Button stopButton = new Button();
         private readonly Button reportButton = new Button();
         private readonly Button dataButton = new Button();
-        private readonly Button clearDataButton = new Button();
         private readonly Button exitButton = new Button();
-        private readonly Button cloudButton = new Button();
         private readonly Button aboutButton = new Button();
         private readonly Button settingsButton = new Button();
         private readonly Button eventNoteButton = new Button();
@@ -116,6 +113,7 @@ namespace NetCheck
         private Icon onlineTrayIcon;
         private Icon offlineTrayIcon;
         private System.Threading.Timer timer;
+        private System.Threading.Timer speedScheduleTimer;
         private StreamWriter writer;
         private StreamWriter backupWriter;
         private string csvPath;
@@ -146,6 +144,8 @@ namespace NetCheck
         private AdvancedDiagnosticResult lastAdvancedDiagnostic;
         private DateTime lastAdvancedDiagnosticAt = DateTime.MinValue;
         private bool shutdownBlockReasonActive;
+        private int speedTestRunning;
+        private SpeedTestCancellation speedCancellation;
         private readonly List<CheckRecord> records = new List<CheckRecord>();
         private readonly List<TimePeriod> pauses = new List<TimePeriod>();
         private readonly List<EventNote> eventNotes = new List<EventNote>();
@@ -178,8 +178,8 @@ namespace NetCheck
             Text = L.T("對外網路連線能力監控程式", "NetCheckMonitor Network Monitor");
             Icon = LoadApplicationIcon();
             Font = new Font("Microsoft JhengHei UI", 10F);
-            ClientSize = new Size(780, 530);
-            MinimumSize = new Size(700, 480);
+            ClientSize = new Size(780, 570);
+            MinimumSize = new Size(700, 520);
             StartPosition = FormStartPosition.CenterScreen;
 
             var title = new Label { Text = L.T("對外連線能力監控", "Network Connection Monitor"), Font = new Font(Font.FontFamily, 18F, FontStyle.Bold), AutoSize = true, Location = new Point(22, 18) };
@@ -201,62 +201,51 @@ namespace NetCheck
             intervalBox.Location = new Point(660, 21);
             intervalBox.Size = new Size(90, 25);
 
-            startButton.Text = L.T("開始監控", "Start");
             pauseButton.Text = L.T("暫停", "Pause");
-            stopButton.Text = L.T("結束並產生報表", "Stop and Create Report");
-            reportButton.Text = L.T("產生即時報表", "Create Live Report");
+            reportButton.Text = L.T("查看報表", "View Report");
             dataButton.Text = L.T("下載報表 PDF 文件", "Download PDF Report");
-            clearDataButton.Text = L.T("清除儲存資料", "Clear Saved Data");
             exitButton.Text = L.T("關閉程式", "Exit");
-            cloudButton.Text = L.T("Google Drive 備份設定", "Google Drive Backup");
             aboutButton.Text = L.T("關於", "About");
             settingsButton.Text = L.T("設定", "Settings");
             eventNoteButton.Text = L.T("事件註記", "Event Note");
-            startButton.SetBounds(25, 112, 125, 38);
-            pauseButton.SetBounds(160, 112, 105, 38);
-            stopButton.SetBounds(275, 112, 175, 38);
-            reportButton.SetBounds(460, 112, 145, 38);
-            dataButton.SetBounds(615, 112, 140, 38);
-            clearDataButton.SetBounds(520, 502, 120, 24);
-            clearDataButton.Font = new Font(Font.FontFamily, 8.5F);
-            clearDataButton.ForeColor = Color.Firebrick;
-            clearDataButton.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
-            exitButton.SetBounds(650, 502, 105, 24);
+            startButton.SetBounds(25, 112, 145, 38);
+            startButton.Font = new Font(Font.FontFamily, 10F, FontStyle.Bold);
+            startButton.FlatStyle = FlatStyle.Flat;
+            startButton.UseVisualStyleBackColor = false;
+            UpdateStartStopButton(false);
+            pauseButton.SetBounds(180, 112, 95, 38);
+            eventNoteButton.SetBounds(285, 112, 110, 38);
+            reportButton.SetBounds(405, 112, 120, 38);
+            dataButton.SetBounds(535, 112, 220, 38);
+            exitButton.SetBounds(650, 542, 105, 24);
             exitButton.Font = new Font(Font.FontFamily, 8.5F, FontStyle.Bold);
             exitButton.ForeColor = Color.Firebrick;
             exitButton.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
-            cloudButton.SetBounds(25, 502, 165, 24);
-            cloudButton.Font = new Font(Font.FontFamily, 8.5F);
-            cloudButton.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
-            aboutButton.SetBounds(200, 502, 70, 24);
-            aboutButton.Font = new Font(Font.FontFamily, 8.5F);
-            aboutButton.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
-            settingsButton.SetBounds(280, 502, 80, 24);
+            settingsButton.SetBounds(25, 542, 90, 24);
             settingsButton.Font = new Font(Font.FontFamily, 8.5F);
             settingsButton.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
-            eventNoteButton.SetBounds(370, 502, 120, 24);
-            eventNoteButton.Font = new Font(Font.FontFamily, 8.5F);
-            eventNoteButton.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
+            aboutButton.SetBounds(125, 542, 70, 24);
+            aboutButton.Font = new Font(Font.FontFamily, 8.5F);
+            aboutButton.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
             eventNoteButton.Enabled = false;
             pauseButton.Enabled = false;
-            stopButton.Enabled = false;
             reportButton.Enabled = false;
 
             lastLabel.Text = L.T("最後檢查：—", "Last check: —");
             lastLabel.AutoSize = true;
-            lastLabel.Location = new Point(27, 166);
+            lastLabel.Location = new Point(27, 167);
             statsLabel.Text = L.T("有效檢查 0 次｜正常 0 次｜斷線 0 次｜暫停時間不列入統計", "Checks 0 | Online 0 | Offline 0 | Paused time excluded");
             statsLabel.AutoSize = true;
-            statsLabel.Location = new Point(27, 193);
+            statsLabel.Location = new Point(27, 194);
 
             networkInfoLabel.Text = L.T("目前網卡：正在讀取…", "Adapter: Reading…");
             networkInfoLabel.AutoEllipsis = true;
             networkInfoLabel.ForeColor = Color.DimGray;
             networkInfoLabel.Font = new Font(Font.FontFamily, 8.5F);
-            networkInfoLabel.SetBounds(27, 216, 728, 24);
+            networkInfoLabel.SetBounds(27, 217, 728, 24);
 
-            recentList.Location = new Point(25, 248);
-            recentList.Size = new Size(730, 250);
+            recentList.Location = new Point(25, 249);
+            recentList.Size = new Size(730, 289);
             recentList.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
             recentList.View = View.Details;
             recentList.FullRowSelect = true;
@@ -266,16 +255,13 @@ namespace NetCheck
             recentList.Columns.Add(L.T("延遲", "Latency"), 90);
             recentList.Columns.Add(L.T("檢測目標 / 說明", "Target / Details"), 365);
 
-            Controls.AddRange(new Control[] { title, versionLabel, stateLabel, intervalLabel, intervalBox, startButton, pauseButton, stopButton, reportButton, dataButton, lastLabel, statsLabel, networkInfoLabel, recentList, clearDataButton, exitButton, cloudButton, aboutButton, settingsButton, eventNoteButton });
+            Controls.AddRange(new Control[] { title, versionLabel, stateLabel, intervalLabel, intervalBox, startButton, pauseButton, reportButton, dataButton, lastLabel, statsLabel, networkInfoLabel, recentList, exitButton, aboutButton, settingsButton, eventNoteButton });
 
-            startButton.Click += delegate { StartMonitoring(); };
+            startButton.Click += delegate { if (running) StopMonitoring(false); else StartMonitoring(); };
             pauseButton.Click += delegate { TogglePause(); };
-            stopButton.Click += delegate { StopMonitoring(true); };
             reportButton.Click += delegate { if (running) CreateLiveReport(true); else OpenReport(); };
             dataButton.Click += delegate { ShowDataManager(); };
-            clearDataButton.Click += delegate { ClearStoredData(); };
             exitButton.Click += delegate { RequestExit(); };
-            cloudButton.Click += delegate { ShowCloudSettings(); };
             aboutButton.Click += delegate { using (var form = new AboutForm()) form.ShowDialog(this); };
             settingsButton.Click += delegate { ShowMonitorSettings(); };
             eventNoteButton.Click += delegate { ShowEventNoteDialog(); };
@@ -298,7 +284,6 @@ namespace NetCheck
             EnsureMachineIdentity();
             try { reportPath = ArchiveReport.EnsureCumulativeHtml(machineName, machineId); }
             catch { reportPath = ArchiveReport.FindLatestCumulativeHtml(machineId); }
-            if (!String.IsNullOrEmpty(reportPath)) reportButton.Text = L.T("開啟累積報表", "Open Cumulative Report");
             reportButton.Enabled = !String.IsNullOrEmpty(reportPath);
             monitorSettings = MonitorSettingsStore.Load();
             if (String.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("NETCHECK_MONITOR_SETTINGS")))
@@ -313,7 +298,7 @@ namespace NetCheck
             eventNotes.Clear();
             recentList.Items.Clear();
             reportPath = null;
-            reportButton.Text = L.T("產生即時報表", "Create Live Report");
+            reportButton.Text = L.T("查看報表", "View Report");
             reportButton.Enabled = true;
             lastAutoReport = DateTime.MinValue;
             logWarning = null;
@@ -360,10 +345,10 @@ namespace NetCheck
             running = true;
             paused = false;
             intervalBox.Enabled = false;
-            startButton.Enabled = false;
+            UpdateStartStopButton(true);
+            startButton.Enabled = true;
             settingsButton.Enabled = true;
             pauseButton.Enabled = true;
-            stopButton.Enabled = true;
             eventNoteButton.Enabled = true;
             pauseButton.Text = L.T("暫停", "Pause");
             UpdatePowerProtection();
@@ -372,6 +357,7 @@ namespace NetCheck
             SetTrayConnectionState(TrayConnectionState.Checking, true);
             PersistSessionState();
             timer = new System.Threading.Timer(delegate { PerformCheck(); }, null, 0, Timeout.Infinite);
+            RefreshSpeedSchedule();
         }
 
         private void EnsureMachineIdentity()
@@ -385,6 +371,119 @@ namespace NetCheck
         {
             EnsureMachineIdentity();
             using (var form = new DataReportForm(machineName, machineId)) form.ShowDialog(this);
+        }
+
+        private void BeginScheduledSpeedTest()
+        {
+            if (Interlocked.CompareExchange(ref speedTestRunning, 1, 0) != 0) return;
+            monitorSettings = monitorSettings ?? MonitorSettingsStore.Load();
+            SpeedTestOptions options = monitorSettings.SpeedTest ?? SpeedTestOptions.Defaults();
+            SpeedTestLevel level = options.EffectiveLevel;
+            if (!running || paused || !options.ScheduledEnabled) { Interlocked.Exchange(ref speedTestRunning, 0); RefreshSpeedSchedule(); return; }
+            DateTime blockedUntilUtc = GetSpeedTestBlockedUntilUtc(options);
+            if (blockedUntilUtc > DateTime.UtcNow)
+            {
+                Interlocked.Exchange(ref speedTestRunning, 0);
+                RefreshSpeedSchedule();
+                return;
+            }
+            NetworkCostState cost = NetworkCostReader.GetCurrent();
+            if (cost == NetworkCostState.Metered || cost == NetworkCostState.Roaming || cost == NetworkCostState.OverLimit)
+            {
+                if (!options.AllowMeteredNetwork)
+                {
+                    var skipped = new SpeedTestResult { Time = DateTime.Now, Status = "SKIPPED", Level = level, Scheduled = true, Error = L.T("偵測到計量付費、漫遊或超過流量上限的網路，依設定略過。", "A metered, roaming, or over-limit connection was detected and skipped by configuration."), Network = NetworkStatusReader.Capture() };
+                    try { SpeedTestStorage.Append(machineName, machineId, skipped); } catch { }
+                    FinishSpeedTest(skipped); return;
+                }
+                if (MessageBox.Show(L.T("Windows 顯示目前可能是計量付費、漫遊或已超過流量上限的網路。測速可能產生額外費用，仍要繼續嗎？", "Windows reports a metered, roaming, or over-limit connection. The speed test may cause extra charges. Continue anyway?"), L.T("計量網路警告（1/2）", "Metered Network Warning (1/2)"), MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes) { Interlocked.Exchange(ref speedTestRunning, 0); RefreshSpeedSchedule(); return; }
+                if (MessageBox.Show(L.T("再次確認：本次測速會立即下載及上傳大量資料，確定由您承擔可能的流量費用並開始嗎？", "Confirm again: this test immediately downloads and uploads substantial data. Do you accept possible data charges and want to start?"), L.T("計量網路最後確認（2/2）", "Final Metered Network Confirmation (2/2)"), MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes) { Interlocked.Exchange(ref speedTestRunning, 0); RefreshSpeedSchedule(); return; }
+            }
+            options.LastAttemptUtc = DateTime.UtcNow;
+            monitorSettings.SpeedTest = options;
+            try { MonitorSettingsStore.Save(monitorSettings); } catch { }
+            speedCancellation = new SpeedTestCancellation();
+            ThreadPool.QueueUserWorkItem(delegate
+            {
+                SpeedTestResult result = CloudflareSpeedTest.Run(level, true, speedCancellation);
+                try { SpeedTestStorage.Append(machineName, machineId, result); }
+                catch (Exception ex) { result.Status = "FAILED"; result.Error = L.T("測速完成但無法儲存：", "Test completed but could not be saved: ") + ex.Message; }
+                if (!IsDisposed && IsHandleCreated) BeginInvoke((MethodInvoker)delegate { FinishSpeedTest(result); });
+                else Interlocked.Exchange(ref speedTestRunning, 0);
+            });
+        }
+
+        private void CancelSpeedTest()
+        {
+            SpeedTestCancellation value = speedCancellation;
+            if (value != null) value.Cancel();
+        }
+
+        private void FinishSpeedTest(SpeedTestResult result)
+        {
+            monitorSettings = monitorSettings ?? MonitorSettingsStore.Load();
+            monitorSettings.SpeedTest = monitorSettings.SpeedTest ?? SpeedTestOptions.Defaults();
+            if (result.Scheduled)
+            {
+                monitorSettings.SpeedTest.LastScheduledRunUtc = DateTime.UtcNow;
+            }
+            if (result.RateLimited)
+            {
+                int backoff = Math.Max(1, Math.Min(5, monitorSettings.SpeedTest.RateLimitBackoffLevel + 1));
+                double minutes = 60 * Math.Pow(2, backoff - 1);
+                if (result.RetryAfterSeconds > 0) minutes = Math.Max(minutes, Math.Ceiling(result.RetryAfterSeconds / 60.0));
+                monitorSettings.SpeedTest.RateLimitBackoffLevel = backoff;
+                monitorSettings.SpeedTest.ServerCooldownUntilUtc = DateTime.UtcNow.AddMinutes(Math.Min(1440, minutes));
+                result.Error = (result.Error ?? "") + L.T("；遠端伺服器已拒絕過於頻繁的要求，程式將暫停測速至 ", "; the remote server rejected overly frequent requests. Speed tests are paused until ") + monitorSettings.SpeedTest.ServerCooldownUntilUtc.ToLocalTime().ToString("yyyy/MM/dd HH:mm:ss");
+            }
+            else if (result.Status == "COMPLETED")
+            {
+                monitorSettings.SpeedTest.RateLimitBackoffLevel = 0;
+                monitorSettings.SpeedTest.ServerCooldownUntilUtc = DateTime.MinValue;
+            }
+            try { MonitorSettingsStore.Save(monitorSettings); } catch { }
+            string status = result.Status == "COMPLETED" ? L.T("測速完成", "Speed test") : result.Status == "SKIPPED" ? L.T("略過測速", "Speed test skipped") : result.Status == "CANCELLED" ? L.T("取消測速", "Speed test cancelled") : L.T("測速失敗", "Speed test failed");
+            AddRecent(result.Time, status, result.Status == "COMPLETED" ? result.IdleLatencyMs.ToString("0.0") + " ms" : "—", result.DisplaySummary, result.Status == "COMPLETED" ? Color.SeaGreen : Color.Firebrick);
+            speedCancellation = null;
+            Interlocked.Exchange(ref speedTestRunning, 0);
+            RefreshSpeedSchedule();
+        }
+
+        private void OpenSpeedTrendReport()
+        {
+            EnsureMachineIdentity();
+            try { SpeedTrendReport.Open(machineName, machineId); }
+            catch (Exception ex) { MessageBox.Show(L.T("無法產生速度趨勢報表：", "Could not create the speed trend report: ") + ex.Message, L.T("速度趨勢報表", "Speed Trend Report"), MessageBoxButtons.OK, MessageBoxIcon.Error); }
+        }
+
+        private void RefreshSpeedSchedule()
+        {
+            if (speedScheduleTimer != null) { speedScheduleTimer.Dispose(); speedScheduleTimer = null; }
+            SpeedTestOptions options = monitorSettings == null ? null : monitorSettings.SpeedTest;
+            if (!running || paused || options == null || !options.ScheduledEnabled || Volatile.Read(ref speedTestRunning) == 1) return;
+            TimeSpan interval = TimeSpan.FromHours(Math.Max(1, options.IntervalHours));
+            DateTime scheduledDueUtc = options.LastScheduledRunUtc == DateTime.MinValue ? DateTime.UtcNow.Add(interval) : options.LastScheduledRunUtc.Add(interval);
+            DateTime cooldownDueUtc = GetSpeedTestBlockedUntilUtc(options);
+            if (cooldownDueUtc > scheduledDueUtc) scheduledDueUtc = cooldownDueUtc;
+            TimeSpan due = scheduledDueUtc - DateTime.UtcNow;
+            if (due < TimeSpan.FromSeconds(30)) due = TimeSpan.FromSeconds(30);
+            if (due > TimeSpan.FromDays(20)) due = TimeSpan.FromDays(20);
+            speedScheduleTimer = new System.Threading.Timer(delegate
+            {
+                if (!IsDisposed && IsHandleCreated) try { BeginInvoke((MethodInvoker)delegate { BeginScheduledSpeedTest(); }); } catch { }
+            }, null, due, Timeout.InfiniteTimeSpan);
+        }
+
+        private static DateTime GetSpeedTestBlockedUntilUtc(SpeedTestOptions options)
+        {
+            if (options == null) return DateTime.MinValue;
+            DateTime nowUtc = DateTime.UtcNow;
+            DateTime attemptUtc = options.LastAttemptUtc == DateTime.MinValue ? DateTime.MinValue : options.LastAttemptUtc.ToUniversalTime();
+            if (attemptUtc > nowUtc) attemptUtc = nowUtc;
+            DateTime normalCooldown = attemptUtc == DateTime.MinValue ? DateTime.MinValue : attemptUtc.AddMinutes(15);
+            DateTime serverCooldown = options.ServerCooldownUntilUtc == DateTime.MinValue ? DateTime.MinValue : options.ServerCooldownUntilUtc.ToUniversalTime();
+            if (serverCooldown > nowUtc.AddHours(24)) serverCooldown = nowUtc.AddHours(24);
+            return normalCooldown > serverCooldown ? normalCooldown : serverCooldown;
         }
 
         private void ClearStoredData()
@@ -406,7 +505,7 @@ namespace NetCheck
             else
             {
                 reportPath = null;
-                reportButton.Text = L.T("開啟累積報表", "Open Cumulative Report");
+                reportButton.Text = L.T("查看報表", "View Report");
                 reportButton.Enabled = false;
                 MessageBox.Show(L.T("已清除 ", "Cleared ") + deleted + L.T(" 個 NetCheck 儲存檔案。", " NetCheck saved files."), L.T("清除完成", "Clearing Complete"), MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
@@ -419,7 +518,7 @@ namespace NetCheck
 
         private void ShowMonitorSettings()
         {
-            using (var form = new MonitorSettingsForm(monitorSettings, ForceRebuildDailyDetailReports))
+            using (var form = new MonitorSettingsForm(monitorSettings, ForceRebuildDailyDetailReports, OpenSpeedTrendReport, ShowCloudSettings, ClearStoredData))
             {
                 if (form.ShowDialog(this) != DialogResult.OK) return;
                 try
@@ -451,7 +550,7 @@ namespace NetCheck
             if (String.IsNullOrEmpty(output)) output = ArchiveReport.EnsureCumulativeHtml(machineName, machineId);
             if (String.IsNullOrEmpty(output)) throw new InvalidOperationException(L.T("目前沒有可製作報表的測試資料。", "There is currently no test data available for a report."));
             reportPath = ArchiveReport.ForceRebuildDailyDetailReports(output, running);
-            reportButton.Text = running ? L.T("產生即時報表", "Create Live Report") : L.T("開啟累積報表", "Open Cumulative Report");
+            reportButton.Text = L.T("查看報表", "View Report");
             reportButton.Enabled = true;
         }
 
@@ -481,6 +580,7 @@ namespace NetCheck
             MonitorSettingsStore.Save(updated);
             monitorSettings = updated;
             UpdatePowerProtection();
+            RefreshSpeedSchedule();
             if (!updated.AdvancedDiagnosticsEnabled) { lastAdvancedDiagnostic = null; lastAdvancedDiagnosticAt = DateTime.MinValue; }
             if (running)
             {
@@ -516,6 +616,7 @@ namespace NetCheck
                 paused = true;
                 pauseStart = DateTime.Now;
                 if (timer != null) timer.Change(Timeout.Infinite, Timeout.Infinite);
+                RefreshSpeedSchedule();
                 WriteMarker("PAUSED", L.T("監控暫停；此時段不列入統計", "Monitoring paused; this period is excluded from statistics"));
                 AddRecent(pauseStart, L.T("暫停", "Paused"), "—", L.T("此時段不列入統計", "This period is excluded from statistics"), Color.Gray);
                 pauseButton.Text = L.T("繼續", "Resume");
@@ -535,6 +636,7 @@ namespace NetCheck
                 SetTrayConnectionState(TrayConnectionState.Checking, true);
                 PersistSessionState();
                 if (timer != null) timer.Change(0, Timeout.Infinite);
+                RefreshSpeedSchedule();
             }
         }
 
@@ -571,7 +673,7 @@ namespace NetCheck
                                 request.Method = "GET";
                                 request.Timeout = 5000;
                                 request.ReadWriteTimeout = 5000;
-                                request.UserAgent = "NetCheckMonitor/0.9.7";
+                                request.UserAgent = "NetCheckMonitor/0.9.8";
                                 request.AllowAutoRedirect = true;
                                 using (var response = (HttpWebResponse)request.GetResponse())
                                 {
@@ -781,13 +883,13 @@ namespace NetCheck
 
             running = true;
             reportPath = null;
-            reportButton.Text = L.T("產生即時報表", "Create Live Report");
+            reportButton.Text = L.T("查看報表", "View Report");
             reportButton.Enabled = true;
             intervalBox.Enabled = false;
-            startButton.Enabled = false;
+            UpdateStartStopButton(true);
+            startButton.Enabled = true;
             settingsButton.Enabled = true;
             pauseButton.Enabled = true;
-            stopButton.Enabled = true;
             eventNoteButton.Enabled = true;
             pauseButton.Text = paused ? L.T("繼續", "Resume") : L.T("暫停", "Pause");
             UpdatePowerProtection();
@@ -887,6 +989,8 @@ namespace NetCheck
             if (!running) return;
             running = false;
             if (timer != null) { timer.Dispose(); timer = null; }
+            if (speedScheduleTimer != null) { speedScheduleTimer.Dispose(); speedScheduleTimer = null; }
+            if (speedCancellation != null) speedCancellation.Cancel();
             if (paused)
             {
                 pauses.Add(new TimePeriod { Start = pauseStart, End = DateTime.Now });
@@ -899,18 +1003,29 @@ namespace NetCheck
             ResetOutageTracking();
             UpdatePowerProtection();
             intervalBox.Enabled = true;
+            UpdateStartStopButton(false);
             startButton.Enabled = true;
             settingsButton.Enabled = true;
             pauseButton.Enabled = false;
-            stopButton.Enabled = false;
             eventNoteButton.Enabled = false;
             pauseButton.Text = L.T("暫停", "Pause");
             UpdateState(L.T("監控已結束", "Monitoring stopped"), Color.DimGray);
             SetTrayConnectionState(TrayConnectionState.Idle, false);
             reportPath = BuildReport(DateTime.Now, false);
-            reportButton.Text = L.T("開啟累積報表", "Open Cumulative Report");
+            reportButton.Text = L.T("查看報表", "View Report");
             reportButton.Enabled = File.Exists(reportPath);
             if (openReport) OpenReport();
+        }
+
+        private void UpdateStartStopButton(bool monitoring)
+        {
+            startButton.Text = monitoring ? L.T("停止監控", "Stop Monitoring") : L.T("開始監控", "Start Monitoring");
+            startButton.BackColor = monitoring ? Color.Firebrick : Color.SeaGreen;
+            startButton.ForeColor = Color.White;
+            startButton.FlatAppearance.BorderColor = monitoring ? Color.DarkRed : Color.DarkGreen;
+            startButton.FlatAppearance.BorderSize = 2;
+            startButton.FlatAppearance.MouseOverBackColor = monitoring ? Color.Crimson : Color.MediumSeaGreen;
+            startButton.FlatAppearance.MouseDownBackColor = monitoring ? Color.DarkRed : Color.DarkGreen;
         }
 
         private bool SaveAndFinalizeForExit()
@@ -941,6 +1056,8 @@ namespace NetCheck
             WriteMarker("SYSTEM_SHUTDOWN", L.T("Windows 正在關機；保留狀態供下次接續", "Windows is shutting down; state retained for resume"));
             running = false;
             if (timer != null) { timer.Dispose(); timer = null; }
+            if (speedScheduleTimer != null) { speedScheduleTimer.Dispose(); speedScheduleTimer = null; }
+            if (speedCancellation != null) speedCancellation.Cancel();
             CloseWriter(ref writer);
             CloseWriter(ref backupWriter);
             UpdatePowerProtection();
@@ -948,6 +1065,11 @@ namespace NetCheck
 
         private void RequestExit()
         {
+            if (Volatile.Read(ref speedTestRunning) == 1)
+            {
+                if (MessageBox.Show(L.T("測速仍在進行。要先取消測速並等待紀錄儲存完成嗎？完成後請再次按「關閉程式」。", "A speed test is still running. Cancel it and wait for its record to be saved? Select Exit again after it finishes."), L.T("測速尚未完成", "Speed Test in Progress"), MessageBoxButtons.YesNo, MessageBoxIcon.Warning) == DialogResult.Yes) CancelSpeedTest();
+                return;
+            }
             if (cloudManager != null && cloudManager.BackupInProgress)
             {
                 MessageBox.Show(L.T("Google Drive 雲端備份仍在進行，請等待備份完成後再關閉程式。", "A Google Drive backup is still in progress. Wait for it to finish before closing the program."), "NetCheckMonitor", MessageBoxButtons.OK, MessageBoxIcon.Information);
@@ -1609,7 +1731,7 @@ namespace NetCheck
 
     internal sealed class AboutForm : Form
     {
-        internal const string AppVersion = "0.9.7";
+        internal const string AppVersion = "0.9.8";
         internal const string Purpose = "可定時監控對外網路連線，紀錄斷線並產生圖文報表，並支援網路硬碟備份，PDF 下載，程式完全免費開源無廣告。";
         internal const string EnglishPurpose = "Scheduled monitoring of external Internet connectivity, outage logging, graphical reports, cloud-drive backup, and PDF downloads. Completely free, open source, and ad-free.";
         private const string GitHubProjectUrl = "https://github.com/ahui3c/NetCheckMonitor";
