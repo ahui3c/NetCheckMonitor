@@ -1,6 +1,6 @@
 # NetCheckMonitor User Guide (English)
 
-Version: 0.9.7
+Version: 0.9.8
 
 NetCheckMonitor periodically tests public Internet connectivity, records outages, and produces graphical reports. It supports Google Drive backup and PDF downloads and is completely free, open source, and ad-free.
 
@@ -15,16 +15,16 @@ NetCheckMonitor periodically tests public Internet connectivity, records outages
 1. Run `NetCheckMonitor.exe`.
 2. The default interval is 60 seconds. You may change it before starting.
 3. To use your own targets, open **Settings**, choose custom targets, and enter one to three websites or IP addresses.
-4. Select **Start**. The program keeps running in the system tray when minimized.
+4. Select the green **Start Monitoring** button. It changes to a red **Stop Monitoring** button while active. The program keeps running in the system tray when minimized.
    The first failure triggers a fast retry after 5 seconds. Consecutive failures confirm an outage. Prolonged outages automatically use a lower retry frequency, but the interval never exceeds the period configured on the main screen.
    The system tray icon remains visible while monitoring: green means online, red means a confirmed outage, orange means checking, and gray means paused.
    The main window shows the current adapter, connection type (wired/Wi-Fi/VPN), and Wi-Fi signal percentage. Adapter changes are stored in CSV, HTML, and PDF reports.
 5. Select **Pause** when a period should not be counted, then **Resume** to continue. The period remains marked but is excluded from statistics.
-6. Select **Stop and Create Report** to create a cumulative HTML report containing all historical monitoring data that has not been cleared.
+6. Select **View Report** during monitoring to update and open the cumulative HTML report. When finished, select the red **Stop Monitoring** button to save the data and final report safely.
 
 ## Event notes
 
-- After monitoring starts, select **Event Note** at the bottom of the main window. It remains available while monitoring is paused.
+- After monitoring starts, select **Event Note** immediately to the right of **Pause**. It remains available while monitoring is paused.
 - Enter up to 500 characters, or use a quick entry: **Restarted modem**, **Restarted wireless router**, **Restarted computer**, **Rain**, or **Thunder**.
 - The note and current timestamp are written immediately to the primary CSV and local recovery copy, then integrated into the **Outage Events and Event Notes** table. Purple markers show notes on 24-hour timelines.
 - In HTML reports, hover near a connectivity or purple note marker to view its time, status, and note details.
@@ -43,9 +43,16 @@ NetCheckMonitor periodically tests public Internet connectivity, records outages
 - Sleep protection and Windows shutdown/restart protection are separate options. Sleep protection is enabled by default; shutdown protection is disabled by default. When shutdown protection is enabled, stop monitoring or use **Exit** before shutting down. Forced updates, power loss, and hardware resets can still interrupt the app.
 - Optional advanced layered diagnostics run only after an HTTPS failure and check the adapter, default gateway, DNS, IPv4, IPv6, HTTPS target, and Wi-Fi signal. Toggling this option while monitoring takes effect immediately without restarting the session.
 
+## Scheduled speed-test reference (Beta)
+
+- Enable Cloudflare scheduled testing under **Settings** → **Scheduled Speed Test Settings (Beta)**. The default is 24 hours, configurable from 1 to 168 hours.
+- Quick, Standard, and Full levels are available. Tests use substantial data, and results may differ from Speedtest or Chunghwa Telecom HiNet; they are for trend and troubleshooting reference only.
+- Metered networks are skipped by default. A 15-minute cooldown and automatic HTTP 403/429 backoff prevent overly frequent use of the remote service.
+- **Open Speed Trend Report** shows download, upload, latency, jitter, transferred data, and network-interface history without affecting outage statistics.
+
 ## Live reports and PDF
 
-- Select **Create Live Report** at any time; monitoring continues uninterrupted.
+- Select **View Report** at any time; the live report is updated first and monitoring continues uninterrupted.
 - The cumulative `_Cumulative_Live.html` report is refreshed automatically every 10 minutes.
 - Live and final HTML reports aggregate every saved CSV that has not been cleared instead of using only the current run.
 - App-not-running, powered-off, between-session, and sessions containing no checks are excluded from effective monitoring time and outage percentage.
@@ -63,7 +70,7 @@ NetCheckMonitor periodically tests public Internet connectivity, records outages
 
 ## Daily Google Drive backup
 
-1. Open **Google Drive Backup**.
+1. Open **Settings** → **Google Drive Backup Settings**.
 2. Select **Sign in to Google Drive**, sign in with your own account in the system browser, and grant permission.
 3. Set and save the daily backup time. The default is 23:55.
 4. The first successful connection creates or reuses `Net_Check` in Drive.
@@ -91,7 +98,7 @@ The app requests only the `drive.file` scope. Windows DPAPI encrypts the sign-in
 
 ## Clear saved data
 
-**Clear Saved Data** in the lower-right corner removes CSV, HTML, live-report, and recovery files managed by NetCheckMonitor. Only this action resets future cumulative reports to an empty data set. PDFs downloaded elsewhere are not removed. Clearing is blocked while monitoring or cloud backup is active.
+**Clear All Saved Data** in Settings removes CSV, HTML, live-report, and recovery files managed by NetCheckMonitor. Only this action resets future cumulative reports to an empty data set. PDFs downloaded elsewhere are not removed. Clearing is blocked while monitoring or cloud backup is active.
 
 ## Daily outage percentage
 

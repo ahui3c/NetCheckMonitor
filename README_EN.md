@@ -6,15 +6,14 @@
 
 NetCheckMonitor is a free, open-source, ad-free Windows utility that periodically checks whether a computer can reach the public Internet. It records outages over hours or days and creates graphical HTML and PDF reports suitable for troubleshooting home Internet service or documenting connection problems for an ISP.
 
-Current version: **0.9.7**
+Current version: **0.9.8**
 
-## What's new in 0.9.7
+## What's new in 0.9.8
 
-- Fixed the Google Drive sign-in failure that reported `client_secret is missing` after browser authorization while retaining PKCE and the limited `drive.file` scope.
-- Moved application settings to a portable file beside the executable, with one-time background migration from previous versions.
-- Added **Export All Data Backup ZIP** in Settings to package raw CSV data and HTML/PDF reports for download.
+- Added an optional Cloudflare scheduled speed-test reference feature (Beta), including test levels, data-usage safeguards, and a separate speed trend report.
+- Simplified the main interface by combining Start/Stop monitoring, unifying report access, and relocating Event Note, Google Drive backup, and data clearing controls.
 
-See the complete [0.9.7 release notes](docs/RELEASE_NOTES_0.9.7.md).
+See the complete [0.9.8 release notes](docs/RELEASE_NOTES_0.9.8.md).
 
 ## Download
 
@@ -47,6 +46,11 @@ See the complete [0.9.7 release notes](docs/RELEASE_NOTES_0.9.7.md).
 - Startup checks whether NetCheckMonitor is already running. A duplicate launch shows the existing window instead of creating a second monitoring process.
 - Performs scheduled daily Google Drive backups of the complete PDF and raw CSV to `Net_Check`.
 - Settings can prevent Windows sleep while monitoring and can separately block shutdown or restart. When shutdown protection is enabled, stop monitoring or use the lower-right **Exit** button first. Forced updates, power loss, and hardware resets can still interrupt the app.
+- Speed testing is currently marked Beta and is available only as an optional scheduled Cloudflare test; the main window does not provide an on-demand test button. Quick, Standard, and Full multi-stream levels are available in Settings.
+- Optional scheduled speed tests can run every 1–168 hours (24 hours by default and disabled by default), only while monitoring is active and not paused. Metered, roaming, or over-limit connections are skipped by default; when explicitly allowed, each run still requires two warnings.
+- The speed-test settings page provides the separate HTML trend report plus official Speedtest and HiNet comparison links. The report includes download, upload, latency, jitter, daily summaries, transferred data, and network-interface context without affecting outage statistics.
+- Cloudflare and Speedtest use different servers, routes, and measurement methods, so their numbers need not match. Up to eight transfer streams are used to reduce under-reporting on fast fiber connections.
+- Scheduled tests retain a persistent cooldown of at least 15 minutes after a test starts. Cloudflare does not publish a fixed limit for these speed-test endpoints; HTTP 403/429 responses trigger at least a 60-minute pause, honor a longer `Retry-After`, and progressively back off up to 24 hours.
 - The X button minimizes to the system tray; the first use shows a one-time reminder to exit safely with the lower-right **Exit** button.
 - Safely exits only after records are flushed and a final report has been created.
 
@@ -55,18 +59,19 @@ See the complete [0.9.7 release notes](docs/RELEASE_NOTES_0.9.7.md).
 1. Download and extract the portable package.
 2. Run `NetCheckMonitor.exe`.
 3. Open **Settings** to use custom targets or enable advanced layered diagnostics after failures.
-4. Confirm the check interval and select **Start**.
+4. Confirm the check interval and select the green **Start Monitoring** button. While active, the same button changes to a red **Stop Monitoring** button for clear state recognition.
    If an unfinished session is found, the app first asks whether to resume it.
 5. Select **Pause** for periods that should not be included in statistics, then **Resume** to continue.
-6. While monitoring, you may create a live report or download a PDF at any time.
-7. Select **Stop and Create Report** when testing is complete.
+6. While monitoring, select **View Report** or download a PDF at any time without interrupting monitoring.
+7. Select **Stop Monitoring** when testing is complete; records are safely saved and the cumulative report is updated.
+8. To measure bandwidth periodically, enable it under **Settings** → **Scheduled Speed Test Settings**. The speed trend report and links to other official speed-test services are also available there.
 7. Use the **Exit** button in the lower-right corner so the program can verify that all data is saved.
 
 See the complete [English user guide](docs/User_Guide_EN.md).
 
 ## Google Drive backup
 
-1. Open **Google Drive Backup**.
+1. Open **Settings** → **Google Drive Backup Settings**.
 2. Select **Sign in to Google Drive** and authorize your own Google account in the system browser.
 3. Set the daily backup time.
 

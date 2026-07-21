@@ -378,7 +378,7 @@ namespace NetCheck
                     ZipArchiveEntry manifestEntry = archive.CreateEntry("Backup_Manifest.txt", CompressionLevel.Optimal);
                     using (var writer = new StreamWriter(manifestEntry.Open(), new UTF8Encoding(true)))
                     {
-                        writer.WriteLine("NetCheckMonitor 0.9.7");
+                        writer.WriteLine("NetCheckMonitor 0.9.8");
                         writer.WriteLine("Exported: " + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss zzz"));
                         writer.WriteLine("Computer: " + Environment.MachineName);
                         writer.WriteLine("Files: " + count);

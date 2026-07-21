@@ -50,6 +50,8 @@ $sources = @(
     (Join-Path $root 'NetworkStatus.cs'),
     (Join-Path $root 'AdvancedDiagnostics.cs'),
     (Join-Path $root 'EventNotes.cs'),
+    (Join-Path $root 'SpeedTest.cs'),
+    (Join-Path $root 'SpeedReport.cs'),
     (Join-Path $root 'MonitorSettings.cs'),
     (Join-Path $root 'SessionRecovery.cs'),
     (Join-Path $root 'NetCheck.cs'),

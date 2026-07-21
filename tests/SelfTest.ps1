@@ -3,6 +3,7 @@ param([string]$ExecutableName = 'NetCheckMonitor.exe')
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
 $testRoot = Join-Path $root '.selftest'
+if (Test-Path -LiteralPath $testRoot) { Remove-Item -LiteralPath $testRoot -Recurse -Force }
 New-Item -ItemType Directory -Force -Path $testRoot | Out-Null
 Copy-Item -LiteralPath (Join-Path $root ('NetCheck-Portable\' + $ExecutableName)) -Destination (Join-Path $testRoot 'NetCheckMonitor.exe') -Force
 $env:NETCHECK_BACKUP_DIR = Join-Path $testRoot 'Backup'
@@ -28,10 +29,10 @@ if ($null -ne $firstMutexArgs[0]) { $firstMutexArgs[0].ReleaseMutex(); $firstMut
 $form = [Activator]::CreateInstance($type, $true)
 $flags = [Reflection.BindingFlags]'Instance,NonPublic'
 $staticFlags = [Reflection.BindingFlags]'Static,NonPublic'
+$startButton = $type.GetField('startButton', $flags).GetValue($form)
+$reportButton = $type.GetField('reportButton', $flags).GetValue($form)
 $dataButton = $type.GetField('dataButton', $flags).GetValue($form)
-$clearDataButton = $type.GetField('clearDataButton', $flags).GetValue($form)
 $exitButton = $type.GetField('exitButton', $flags).GetValue($form)
-$cloudButton = $type.GetField('cloudButton', $flags).GetValue($form)
 $aboutButton = $type.GetField('aboutButton', $flags).GetValue($form)
 $settingsButton = $type.GetField('settingsButton', $flags).GetValue($form)
 $eventNoteButton = $type.GetField('eventNoteButton', $flags).GetValue($form)
@@ -55,16 +56,16 @@ $setTrayState.Invoke($form, [object[]]@([Enum]::Parse($trayStateType, 'Idle'), $
 $onlineTrayBitmap.Dispose()
 $offlineTrayBitmap.Dispose()
 $downloadButtonLabel = $dataButton.Text -eq '下載報表 PDF 文件'
-$clearButtonLayout = $clearDataButton.Width -le 130 -and $clearDataButton.Height -le 28 -and $clearDataButton.Top -ge 495
-$exitButtonLayout = $exitButton.Text -eq '關閉程式' -and $exitButton.Width -le 120 -and $exitButton.Height -le 28 -and $exitButton.Top -ge 495 -and $exitButton.Left -gt $clearDataButton.Left
+$exitButtonLayout = $exitButton.Text -eq '關閉程式' -and $exitButton.Width -le 120 -and $exitButton.Height -le 28 -and $exitButton.Top -ge 495
+$mainManagementButtonsRemoved = $null -eq $type.GetField('clearDataButton', $flags) -and $null -eq $type.GetField('cloudButton', $flags) -and $null -eq $type.GetField('stopButton', $flags)
 $reportFormType = $assembly.GetType('NetCheck.DataReportForm', $true)
 $reportForm = [Activator]::CreateInstance($reportFormType, [object[]]@([Environment]::MachineName, 'A1B2C3D4'))
 $clearRemovedFromPdfDialog = $null -eq $reportFormType.GetField('clearButton', $flags)
-$cloudButtonLayout = $cloudButton.Text -eq 'Google Drive 備份設定' -and $cloudButton.Width -le 180 -and $cloudButton.Height -le 28 -and $cloudButton.Top -ge 495
 $aboutButtonLayout = $aboutButton.Text -eq '關於' -and $aboutButton.Width -le 80 -and $aboutButton.Top -ge 495
 $settingsButtonLayout = $settingsButton.Text -eq '設定' -and $settingsButton.Width -le 90 -and $settingsButton.Top -ge 495
-$eventNoteButtonLayout = $eventNoteButton.Text -eq '事件註記' -and $eventNoteButton.Width -le 130 -and $eventNoteButton.Top -ge 495 -and $eventNoteButton.Left -gt $settingsButton.Left
-$homeVersionLabel = $versionLabel.Text -eq 'v0.9.7' -and $versionLabel.Font.Size -le 8.5 -and $versionLabel.ForeColor -eq [Drawing.Color]::DarkGray
+$pauseButton = $type.GetField('pauseButton', $flags).GetValue($form)
+$eventNoteButtonLayout = $eventNoteButton.Text -eq '事件註記' -and $eventNoteButton.Height -eq $pauseButton.Height -and $eventNoteButton.Top -eq $pauseButton.Top -and $eventNoteButton.Left -gt $pauseButton.Right -and ($eventNoteButton.Left - $pauseButton.Right) -le 12
+$homeVersionLabel = $versionLabel.Text -eq 'v0.9.8' -and $versionLabel.Font.Size -le 8.5 -and $versionLabel.ForeColor -eq [Drawing.Color]::DarkGray
 $monitorSettingsType = $assembly.GetType('NetCheck.MonitorSettingsStore', $true)
 $monitorSettingsStorageMethod = $monitorSettingsType.GetMethod('RunStorageSelfTest', [Reflection.BindingFlags]'Static,Public')
 $monitorSettingsStorage = $monitorSettingsStorageMethod.Invoke($null, [object[]]@($env:NETCHECK_MONITOR_SETTINGS))
@@ -77,14 +78,28 @@ $uiPreferenceType.GetMethod('MarkCloseToTrayNoticeShown', [Reflection.BindingFla
 $monitorSettingsValue = $type.GetField('monitorSettings', $flags).GetValue($form)
 $settingsFormType = $assembly.GetType('NetCheck.MonitorSettingsForm', $true)
 $builtInTargets = $type.GetField('TestUrls', $staticFlags).GetValue($null)
-$settingsForm = [Activator]::CreateInstance($settingsFormType, [object[]]@($monitorSettingsValue))
+$settingsForm = [Activator]::CreateInstance($settingsFormType, [object[]]@($monitorSettingsValue, [Action]{ }, [Action]{ }, [Action]{ }, [Action]{ }))
 $settingsFormText = @($settingsForm.Controls | ForEach-Object { $_.Text }) -join "`n"
-$settingsPageContent = $settingsForm.Text -eq '監控目標設定' -and $settingsFormText.Contains('使用內建測試目標（建議）') -and $settingsFormText.Contains('使用自訂測試目標') -and $settingsFormText.Contains('目標 1') -and $settingsFormText.Contains('目標 2') -and $settingsFormText.Contains('目標 3') -and $settingsFormText.Contains('HTTPS 失敗時執行進階分層連線診斷（選用）') -and $settingsFormText.Contains('監控期間防止電腦進入休眠（建議）') -and $settingsFormText.Contains('監控期間阻止 Windows 關機或重新啟動（請先停止監控）') -and $settingsFormText.Contains('登入 Windows 後自動啟動程式') -and $settingsFormText.Contains('程式啟動後自動開始監控') -and $settingsFormText.Contains('介面語言') -and $settingsFormText.Contains('下次啟動程式時套用') -and $settingsFormText.Contains('匯出全部紀錄備份 ZIP') -and $settingsFormText.Contains('強制重製每日詳細報表')
+$settingsPageContent = $settingsForm.Text -eq '監控目標設定' -and $settingsFormText.Contains('使用內建測試目標（建議）') -and $settingsFormText.Contains('使用自訂測試目標') -and $settingsFormText.Contains('目標 1') -and $settingsFormText.Contains('目標 2') -and $settingsFormText.Contains('目標 3') -and $settingsFormText.Contains('HTTPS 失敗時執行進階分層連線診斷（選用）') -and $settingsFormText.Contains('監控期間防止電腦進入休眠（建議）') -and $settingsFormText.Contains('監控期間阻止 Windows 關機或重新啟動（請先停止監控）') -and $settingsFormText.Contains('登入 Windows 後自動啟動程式') -and $settingsFormText.Contains('程式啟動後自動開始監控') -and $settingsFormText.Contains('介面語言') -and $settingsFormText.Contains('下次啟動程式時套用') -and $settingsFormText.Contains('定時測速設定（Beta）…') -and $settingsFormText.Contains('Google Drive 備份設定…') -and $settingsFormText.Contains('清除全部儲存資料…') -and $settingsFormText.Contains('匯出全部紀錄備份 ZIP') -and $settingsFormText.Contains('強制重製每日詳細報表')
 $settingsHidesBuiltInTargets = @($builtInTargets | Where-Object { $settingsFormText.Contains($_) }).Count -eq 0
 $settingsCustomRadio = $settingsFormType.GetField('customRadio', $flags).GetValue($settingsForm)
 $settingsSaveButton = $settingsFormType.GetField('saveButton', $flags).GetValue($settingsForm)
 $settingsLanguageBox = $settingsFormType.GetField('languageBox', $flags).GetValue($settingsForm)
-$settingsCompactLayout = $settingsForm.ClientSize.Height -le 670 -and $settingsCustomRadio.Top -le 180 -and ($settingsSaveButton.Bottom + 12) -le $settingsForm.ClientSize.Height
+$settingsCloudButton = $settingsFormType.GetField('cloudSettingsButton', $flags).GetValue($settingsForm)
+$settingsClearButton = $settingsFormType.GetField('clearDataButton', $flags).GetValue($settingsForm)
+$settingsManagementButtons = $settingsCloudButton.Enabled -and $settingsClearButton.Enabled -and $settingsClearButton.ForeColor -eq [Drawing.Color]::Firebrick
+$settingsCompactLayout = $settingsForm.ClientSize.Height -le 780 -and $settingsCustomRadio.Top -le 180 -and ($settingsSaveButton.Bottom + 12) -le $settingsForm.ClientSize.Height
+$mainControlText = @($form.Controls | ForEach-Object { $_.Text }) -join "`n"
+$homeSpeedButtonsRemoved = -not $mainControlText.Contains('立即測速') -and -not $mainControlText.Contains('速度趨勢報表') -and $null -eq $type.GetField('speedTestButton', $flags) -and $null -eq $type.GetField('speedReportButton', $flags)
+$speedOptionsType = $assembly.GetType('NetCheck.SpeedTestOptions', $true)
+$speedDefaults = $speedOptionsType.GetMethod('Defaults', $staticFlags).Invoke($null, @())
+$speedSettingsFormType = $assembly.GetType('NetCheck.SpeedTestSettingsForm', $true)
+$speedSettingsForm = [Activator]::CreateInstance($speedSettingsFormType, [Reflection.BindingFlags]'Instance,NonPublic', $null, @($speedDefaults, [Action]{ }), $null)
+$speedSettingsText = @($speedSettingsForm.Controls | ForEach-Object { $_.Text }) -join "`n"
+$speedReportSettingsButton = $speedSettingsFormType.GetField('speedReportButton', $flags).GetValue($speedSettingsForm)
+$speedtestLink = $speedSettingsFormType.GetField('speedtestLink', $flags).GetValue($speedSettingsForm)
+$hinetLink = $speedSettingsFormType.GetField('hinetLink', $flags).GetValue($speedSettingsForm)
+$speedSettingsPageContent = $speedSettingsForm.Text -eq '定時測速設定（Beta）' -and $speedSettingsText.Contains('Cloudflare 定時網路測速（Beta）') -and $speedSettingsText.Contains('使用 Cloudflare 測速服務') -and $speedSettingsText.Contains('Speedtest／中華電信測速不同') -and $speedReportSettingsButton.Text -eq '開啟速度趨勢報表' -and $speedReportSettingsButton.Enabled -and $speedtestLink.Text -eq 'Speedtest by Ookla' -and $hinetLink.Text -eq '中華電信 HiNet 測速'
 $settingsLanguageSelection = $settingsLanguageBox.Items.Count -eq 2 -and $settingsLanguageBox.Items[0] -eq '繁體中文' -and $settingsLanguageBox.Items[1] -eq 'English'
 $eventNoteFormType = $assembly.GetType('NetCheck.EventNoteForm', $true)
 $eventNoteForm = [Activator]::CreateInstance($eventNoteFormType)
@@ -116,9 +131,9 @@ $aboutFormType = $assembly.GetType('NetCheck.AboutForm', $true)
 $aboutForm = [Activator]::CreateInstance($aboutFormType)
 $checkVersionButton = $aboutFormType.GetField('checkVersionButton', $flags).GetValue($aboutForm)
 $isNewerVersionMethod = $aboutFormType.GetMethod('IsNewerVersion', [Reflection.BindingFlags]'Static,NonPublic')
-$versionComparison = $isNewerVersionMethod.Invoke($null, @('v0.9.8')) -and -not $isNewerVersionMethod.Invoke($null, @('v0.9.7')) -and -not $isNewerVersionMethod.Invoke($null, @('v0.9.6'))
+$versionComparison = $isNewerVersionMethod.Invoke($null, @('v0.9.9')) -and -not $isNewerVersionMethod.Invoke($null, @('v0.9.8')) -and -not $isNewerVersionMethod.Invoke($null, @('v0.9.7'))
 $aboutText = @($aboutForm.Controls | ForEach-Object { $_.Text }) -join "`n"
-$aboutPageContent = $aboutForm.Text -eq '關於 NetCheckMonitor' -and $aboutText.Contains('NetCheckMonitor') -and $aboutText.Contains('版本 0.9.7') -and $aboutText.Contains('可定時監控對外網路連線，紀錄斷線並產生圖文報表，並支援網路硬碟備份，PDF 下載，程式完全免費開源無廣告。') -and $aboutText.Contains('廖阿輝') -and $aboutText.Contains('chehui@gmail.com') -and $aboutText.Contains('https://ahui3c.com') -and $aboutText.Contains('https://github.com/ahui3c/NetCheckMonitor') -and $checkVersionButton.Text -eq '檢查新版本'
+$aboutPageContent = $aboutForm.Text -eq '關於 NetCheckMonitor' -and $aboutText.Contains('NetCheckMonitor') -and $aboutText.Contains('版本 0.9.8') -and $aboutText.Contains('可定時監控對外網路連線，紀錄斷線並產生圖文報表，並支援網路硬碟備份，PDF 下載，程式完全免費開源無廣告。') -and $aboutText.Contains('廖阿輝') -and $aboutText.Contains('chehui@gmail.com') -and $aboutText.Contains('https://ahui3c.com') -and $aboutText.Contains('https://github.com/ahui3c/NetCheckMonitor') -and $checkVersionButton.Text -eq '檢查新版本'
 $aboutLabels = @($aboutForm.Controls | Where-Object { $_ -is [Windows.Forms.Label] })
 $aboutLinks = @($aboutForm.Controls | Where-Object { $_ -is [Windows.Forms.LinkLabel] })
 $aboutWebsiteLink = @($aboutLinks | Where-Object { $_.Text -eq 'https://ahui3c.com' })
@@ -127,7 +142,7 @@ $aboutUrlLinkScope = [bool]($aboutLabels | Where-Object { $_.Text -eq '網站：
     [bool]($aboutLabels | Where-Object { $_.Text -eq 'GitHub 專案：' }) -and
     $aboutWebsiteLink.Count -eq 1 -and $aboutWebsiteLink[0].LinkArea.Start -eq 0 -and $aboutWebsiteLink[0].LinkArea.Length -eq $aboutWebsiteLink[0].Text.Length -and
     $aboutGitHubLink.Count -eq 1 -and $aboutGitHubLink[0].LinkArea.Start -eq 0 -and $aboutGitHubLink[0].LinkArea.Length -eq $aboutGitHubLink[0].Text.Length
-$programIdentity = $form.Text -eq '對外網路連線能力監控程式' -and $assembly.GetName().Version.ToString() -eq '0.9.7.0'
+$programIdentity = $form.Text -eq '對外網路連線能力監控程式' -and $assembly.GetName().Version.ToString() -eq '0.9.8.0'
 $applicationRecoveryType = $assembly.GetType('NetCheck.ApplicationRecovery', $true)
 $applicationRestartRegistered = $null -ne $applicationRecoveryType.GetMethod('Register', [Reflection.BindingFlags]'Static,Public')
 $embeddedIcon = [Drawing.Icon]::ExtractAssociatedIcon((Join-Path $testRoot 'NetCheckMonitor.exe'))
@@ -164,6 +179,7 @@ $emptyLines = @(
 [IO.File]::WriteAllLines($emptyCsv, $emptyLines, (New-Object Text.UTF8Encoding($true)))
 
 $type.GetMethod('StartMonitoring', $flags).Invoke($form, @())
+$startStopRunningState = $startButton.Enabled -and $startButton.Text -eq '停止監控' -and $startButton.BackColor -eq [Drawing.Color]::Firebrick -and $startButton.ForeColor -eq [Drawing.Color]::White -and $startButton.FlatStyle -eq [Windows.Forms.FlatStyle]::Flat -and $reportButton.Text -eq '查看報表' -and $null -eq $type.GetField('stopButton', $flags)
 $type.GetMethod('AddEventNote', $flags).Invoke($form, @('測試事件：重開數據機'))
 $activeStateCreated = Test-Path -LiteralPath $env:NETCHECK_SESSION_STATE
 $activeTargets = $type.GetField('activeTestUrls', $flags).GetValue($form)
@@ -182,6 +198,7 @@ Start-Sleep -Seconds 18
 $type.GetMethod('CreateLiveReport', $flags).Invoke($form, @($false))
 $liveHtml = Get-ChildItem -LiteralPath (Join-Path $testRoot 'NetCheck_Data') -Filter '*_Live.html' | Select-Object -First 1
 $exitSaveCompleted = $type.GetMethod('SaveAndFinalizeForExit', $flags).Invoke($form, @())
+$startStopToggle = $startStopRunningState -and $startButton.Enabled -and $startButton.Text -eq '開始監控' -and $startButton.BackColor -eq [Drawing.Color]::SeaGreen -and $startButton.ForeColor -eq [Drawing.Color]::White -and $reportButton.Text -eq '查看報表'
 $activeStateCleared = -not (Test-Path -LiteralPath $env:NETCHECK_SESSION_STATE)
 $settingsReenabledAfterMonitoring = $settingsButton.Enabled
 $idleClosingArgs = New-Object System.Windows.Forms.FormClosingEventArgs([System.Windows.Forms.CloseReason]::UserClosing, $false)
@@ -208,7 +225,7 @@ $reportHasChineseProductName = $htmlText.Contains('對外網路連線能力累�
 $cumulativeIncludesHistory = $htmlText.Contains('HISTORY-PC') -and $htmlText.Contains('來源檔案：2')
 $effectiveMatch = [regex]::Match($htmlText, '<span>有效監控</span><b[^>]*>([^<]+)</b>')
 $cumulativeExcludesUnrecordedTime = $effectiveMatch.Success -and -not $effectiveMatch.Groups[1].Value.Contains('天') -and -not $htmlText.Contains('NO-CHECK')
-$reportHasEnhancedSummary = $htmlText.Contains('最長斷線') -and $htmlText.Contains('平均斷線') -and $htmlText.Contains('最短斷線') -and $htmlText.Contains('第 95 百分位延遲') -and $htmlText.Contains('平均延遲變動')
+$reportHasEnhancedSummary = $htmlText.Contains('最長斷線') -and $htmlText.Contains('平均斷線') -and $htmlText.Contains('最短斷線') -and $htmlText.Contains('第 95 百分位延遲') -and $htmlText.Contains('最高延遲／平均變動')
 $reportHasNetworkInfo = $htmlText.Contains('目前網卡') -and $htmlText.Contains('連線類型') -and $htmlText.Contains('Wi-Fi 訊號')
 $reportHasAdvancedDiagnostics = $htmlText.Contains('進階分層連線診斷') -and $htmlText.Contains('診斷標示') -and $htmlText.Contains('分層證據') -and $htmlText.Contains('Findings=')
 $reportHasEventNotes = $htmlText.Contains('斷線事件與事件註記') -and $htmlText.Contains('內容 / 檢查') -and $htmlText.Contains('測試事件：重開數據機') -and $htmlText.Contains("fill='#8e44ad'")
@@ -291,7 +308,8 @@ $updatedSettings.AutoStartMonitoring = $true
 $settingsRestarted = $type.GetMethod('ApplyMonitorSettings', $flags).Invoke($settingsRestartForm, [object[]]@($updatedSettings))
 $newSettingsCsv = $type.GetField('csvPath', $flags).GetValue($settingsRestartForm)
 $restartSettingsButton = $type.GetField('settingsButton', $flags).GetValue($settingsRestartForm)
-$settingsRestartIntegration = $settingsRestarted -and $type.GetField('running', $flags).GetValue($settingsRestartForm) -and $restartSettingsButton.Enabled -and $oldSettingsCsv -ne $newSettingsCsv -and (Test-Path -LiteralPath ([IO.Path]::ChangeExtension($oldSettingsCsv, '.html')))
+$settingsRestartReport = Get-ChildItem -LiteralPath (Split-Path -Parent $oldSettingsCsv) -Filter 'NetCheck_*_Cumulative_Report.html' | Select-Object -First 1
+$settingsRestartIntegration = $settingsRestarted -and $type.GetField('running', $flags).GetValue($settingsRestartForm) -and $restartSettingsButton.Enabled -and $oldSettingsCsv -ne $newSettingsCsv -and $null -ne $settingsRestartReport
 $settingsRestartSaved = $type.GetMethod('SaveAndFinalizeForExit', $flags).Invoke($settingsRestartForm, @())
 $settingsRestartForm.Dispose()
 $autoStartForm = [Activator]::CreateInstance($type, $true)
@@ -318,7 +336,7 @@ $result = [PSCustomObject]@{
     CheckRows        = @($rows | Where-Object Type -eq 'CHECK').Count
     PauseMarker      = [bool]($rows | Where-Object Status -eq 'PAUSED')
     ResumeMarker     = [bool]($rows | Where-Object Status -eq 'RESUMED')
-    ReportHasTimeline = $htmlText.Contains('24 小時時間軸')
+    ReportHasTimeline = $htmlText.Contains('timeline-chart') -and $htmlText.Contains('timeline-axis')
     ReportHasChineseProductName = $reportHasChineseProductName
     ReportHasOutages = $htmlText.Contains('斷線事件')
     ReportMarksPause = $htmlText.Contains('#9aa0a6')
@@ -350,14 +368,17 @@ $result = [PSCustomObject]@{
     DatePdfCreated = $datePdfHeader -eq '%PDF-'
     ClearAllPassed = ([int]$clearArgs[0] -gt 0) -and ($clearFailures.Count -eq 0) -and ($managedFilesLeft.Count -eq 0)
     DownloadButtonLabel = $downloadButtonLabel
-    ClearButtonLayout = $clearButtonLayout
     ExitButtonLayout = $exitButtonLayout
     ExitSaveCompleted = [bool]$exitSaveCompleted
     ClearRemovedFromPdfDialog = $clearRemovedFromPdfDialog
-    CloudButtonLayout = $cloudButtonLayout
+    MainManagementButtonsRemoved = $mainManagementButtonsRemoved
+    SettingsManagementButtons = $settingsManagementButtons
+    StartStopToggle = $startStopToggle
     AboutButtonLayout = $aboutButtonLayout
     SettingsButtonLayout = $settingsButtonLayout
     EventNoteButtonLayout = $eventNoteButtonLayout
+    HomeSpeedButtonsRemoved = $homeSpeedButtonsRemoved
+    SpeedSettingsPageContent = $speedSettingsPageContent
     HomeVersionLabel = $homeVersionLabel
     NetworkStatusCapture = $networkStatusCapture
     NetworkInfoLabel = $networkInfoLabel.Text.Contains('目前網卡：') -and $networkInfoLabel.Text.Contains('連線類型：') -and $networkInfoLabel.Text.Contains('Wi-Fi 訊號：')
@@ -412,6 +433,7 @@ $languageSelectionForm.Dispose()
 $cloudManager.Dispose()
 $reportForm.Dispose()
 $settingsForm.Dispose()
+$speedSettingsForm.Dispose()
 $eventNoteForm.Dispose()
 $aboutForm.Dispose()
 $form.Dispose()
@@ -423,8 +445,8 @@ if (-not $result.CsvCreated -or -not $result.HtmlCreated -or -not $result.LiveHt
     -not $result.ReportHasTimeline -or -not $result.ReportHasChineseProductName -or -not $result.ReportHasOutages -or -not $result.ReportMarksPause -or -not $result.CumulativeIncludesHistory -or -not $result.CumulativeExcludesUnrecordedTime -or
     -not $result.ReportHasDailyStats -or -not $result.ReportHasEnhancedSummary -or -not $result.ReportHasNetworkInfo -or -not $result.ReportHasAdvancedDiagnostics -or -not $result.ReportHasEventNotes -or -not $result.ArchiveReportHasNetworkInfo -or -not $result.ArchiveReportHasAdvancedDiagnostics -or -not $result.ArchiveReportHasEventNotes -or -not $result.ArchiveReportHasDailyDetails -or -not $result.ReportHasComputer -or -not $result.ComputerMarker -or -not $result.TargetMarker -or -not $result.NetworkMarker -or -not $result.PowerProtectionMarker -or -not $result.EventNoteMarker -or -not $result.SuspectedCheck -or -not $result.ConfirmedOfflineCheck -or -not $result.OutageConfirmedMarker -or -not $result.FastRetrySpacing -or -not $result.BoundedOutageBackoff -or -not $result.UniqueFileName -or
     -not $result.DailyOutageCalculated -or -not $result.AllPdfCreated -or -not $result.DatePdfCreated -or -not $result.ClearAllPassed -or
-    -not $result.DownloadButtonLabel -or -not $result.ClearButtonLayout -or -not $result.ExitButtonLayout -or -not $result.ExitSaveCompleted -or -not $result.ClearRemovedFromPdfDialog -or
-    -not $result.CloudButtonLayout -or -not $result.AboutButtonLayout -or -not $result.SettingsButtonLayout -or -not $result.EventNoteButtonLayout -or -not $result.HomeVersionLabel -or -not $result.NetworkStatusCapture -or -not $result.NetworkInfoLabel -or -not $result.OnlineTrayStatus -or -not $result.OfflineTrayStatus -or -not $result.MonitorSettingsStorage -or -not $result.PortableSettingsMigration -or -not $result.AdvancedDiagnosticsClassification -or -not $result.AdvancedToggleNoRestart -or -not $result.PowerProtectionIntegration -or -not $result.ShutdownBlockDecision -or -not $result.CloseReminderStoredOnce -or -not $result.SessionStateStorage -or -not $result.ActiveStateCreated -or -not $result.ActiveStateCleared -or -not $result.ApplicationRestartRegistered -or -not $result.SingleInstanceGuard -or -not $result.DuplicateLaunchShowsExisting -or -not $result.SessionResumeIntegration -or -not $result.AutoStartMonitoring -or -not $result.RecoveryBeforeAutoStart -or -not $result.SettingsPageContent -or -not $result.SettingsLanguageSelection -or -not $result.SettingsHidesBuiltInTargets -or -not $result.SettingsCompactLayout -or -not $result.CustomTargetSequence -or -not $result.SettingsAvailableDuringMonitoring -or -not $result.EventNoteAvailableDuringMonitoring -or -not $result.EventNoteDialogContent -or -not $result.SettingsRestartIntegration -or -not $result.SettingsReenabledAfterMonitoring -or -not $result.AboutPageContent -or -not $result.AboutUrlLinkScope -or -not $result.UpdateVersionComparison -or -not $result.Tls12UpdateCheck -or -not $result.ProgramIdentity -or -not $result.CustomIconEmbedded -or -not $result.CloudDailyPdf -or -not $result.CloudDailyCsv -or -not $result.CloudStorageProtected -or
+    -not $result.DownloadButtonLabel -or -not $result.ExitButtonLayout -or -not $result.ExitSaveCompleted -or -not $result.ClearRemovedFromPdfDialog -or
+    -not $result.MainManagementButtonsRemoved -or -not $result.SettingsManagementButtons -or -not $result.StartStopToggle -or -not $result.AboutButtonLayout -or -not $result.SettingsButtonLayout -or -not $result.EventNoteButtonLayout -or -not $result.HomeSpeedButtonsRemoved -or -not $result.SpeedSettingsPageContent -or -not $result.HomeVersionLabel -or -not $result.NetworkStatusCapture -or -not $result.NetworkInfoLabel -or -not $result.OnlineTrayStatus -or -not $result.OfflineTrayStatus -or -not $result.MonitorSettingsStorage -or -not $result.PortableSettingsMigration -or -not $result.AdvancedDiagnosticsClassification -or -not $result.AdvancedToggleNoRestart -or -not $result.PowerProtectionIntegration -or -not $result.ShutdownBlockDecision -or -not $result.CloseReminderStoredOnce -or -not $result.SessionStateStorage -or -not $result.ActiveStateCreated -or -not $result.ActiveStateCleared -or -not $result.ApplicationRestartRegistered -or -not $result.SingleInstanceGuard -or -not $result.DuplicateLaunchShowsExisting -or -not $result.SessionResumeIntegration -or -not $result.AutoStartMonitoring -or -not $result.RecoveryBeforeAutoStart -or -not $result.SettingsPageContent -or -not $result.SettingsLanguageSelection -or -not $result.SettingsHidesBuiltInTargets -or -not $result.SettingsCompactLayout -or -not $result.CustomTargetSequence -or -not $result.SettingsAvailableDuringMonitoring -or -not $result.EventNoteAvailableDuringMonitoring -or -not $result.EventNoteDialogContent -or -not $result.SettingsRestartIntegration -or -not $result.SettingsReenabledAfterMonitoring -or -not $result.AboutPageContent -or -not $result.AboutUrlLinkScope -or -not $result.UpdateVersionComparison -or -not $result.Tls12UpdateCheck -or -not $result.ProgramIdentity -or -not $result.CustomIconEmbedded -or -not $result.CloudDailyPdf -or -not $result.CloudDailyCsv -or -not $result.CloudStorageProtected -or
     -not $result.OAuthBuiltInClient -or -not $result.OAuthRequestForms -or -not $result.OAuthLoginOnlyUi -or -not $result.LanguageRouting -or -not $result.LanguageStorage -or -not $result.FirstRunLanguageSelection -or -not $result.EnglishUi) {
     throw 'NetCheck self-test failed.'
 }

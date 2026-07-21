@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Drawing;
 using System.IO;
 using System.Net;
@@ -64,6 +65,7 @@ namespace NetCheck
         public bool AdvancedDiagnosticsEnabled { get; set; }
         public bool PreventSleepWhileMonitoring { get; set; }
         public bool PreventShutdownWhileMonitoring { get; set; }
+        public SpeedTestOptions SpeedTest { get; set; }
     }
 
     internal static class MonitorSettingsStore
@@ -136,7 +138,8 @@ namespace NetCheck
                 AutoStartMonitoring = true,
                 AdvancedDiagnosticsEnabled = true,
                 PreventSleepWhileMonitoring = true,
-                PreventShutdownWhileMonitoring = false
+                PreventShutdownWhileMonitoring = false,
+                SpeedTest = new SpeedTestOptions { ScheduledEnabled = true, IntervalHours = 24, Level = "Quick", AllowMeteredNetwork = false }
             };
             SaveToPath(path, expected);
             MonitorTargetSettings loaded = LoadFromPath(path);
@@ -154,12 +157,13 @@ namespace NetCheck
                 && loaded.AdvancedDiagnosticsEnabled
                 && loaded.PreventSleepWhileMonitoring
                 && !loaded.PreventShutdownWhileMonitoring
+                && loaded.SpeedTest != null && loaded.SpeedTest.ScheduledEnabled && loaded.SpeedTest.IntervalHours == 24 && loaded.SpeedTest.Level == "Quick"
                 && normalized;
         }
 
         private static MonitorTargetSettings DefaultSettings()
         {
-            return new MonitorTargetSettings { UseCustomTargets = false, CustomTargets = new List<string>(), PreventSleepWhileMonitoring = true };
+            return new MonitorTargetSettings { UseCustomTargets = false, CustomTargets = new List<string>(), PreventSleepWhileMonitoring = true, SpeedTest = SpeedTestOptions.Defaults() };
         }
 
         private static MonitorTargetSettings LoadFromPath(string path)
@@ -179,6 +183,10 @@ namespace NetCheck
         {
             if (value == null) return DefaultSettings();
             if (!hasSleepSetting) value.PreventSleepWhileMonitoring = true;
+            if (value.SpeedTest == null) value.SpeedTest = SpeedTestOptions.Defaults();
+            value.SpeedTest.IntervalHours = Math.Max(1, Math.Min(168, value.SpeedTest.IntervalHours <= 0 ? 24 : value.SpeedTest.IntervalHours));
+            value.SpeedTest.Level = value.SpeedTest.EffectiveLevel.ToString();
+            value.SpeedTest.RateLimitBackoffLevel = Math.Max(0, Math.Min(5, value.SpeedTest.RateLimitBackoffLevel));
             if (value.CustomTargets == null) value.CustomTargets = new List<string>();
             var valid = new List<string>();
             foreach (string target in value.CustomTargets)
@@ -231,20 +239,34 @@ namespace NetCheck
         private readonly ComboBox languageBox = new ComboBox();
         private readonly Button exportBackupButton = new Button();
         private readonly Button rebuildDailyReportsButton = new Button();
+        private readonly Button speedSettingsButton = new Button();
+        private readonly Button cloudSettingsButton = new Button();
+        private readonly Button clearDataButton = new Button();
         private readonly Button saveButton = new Button();
         private readonly Button cancelButton = new Button();
         private readonly Action rebuildDailyReports;
+        private readonly Action openSpeedReport;
+        private readonly Action showCloudSettings;
+        private readonly Action clearStoredData;
+        private SpeedTestOptions speedOptions;
         public MonitorTargetSettings Result { get; private set; }
         public string SelectedLanguage { get; private set; }
 
-        public MonitorSettingsForm(MonitorTargetSettings current) : this(current, null) { }
+        public MonitorSettingsForm(MonitorTargetSettings current) : this(current, null, null, null, null) { }
 
-        public MonitorSettingsForm(MonitorTargetSettings current, Action rebuildDailyReportsAction)
+        public MonitorSettingsForm(MonitorTargetSettings current, Action rebuildDailyReportsAction) : this(current, rebuildDailyReportsAction, null, null, null) { }
+
+        public MonitorSettingsForm(MonitorTargetSettings current, Action rebuildDailyReportsAction, Action openSpeedReportAction) : this(current, rebuildDailyReportsAction, openSpeedReportAction, null, null) { }
+
+        public MonitorSettingsForm(MonitorTargetSettings current, Action rebuildDailyReportsAction, Action openSpeedReportAction, Action showCloudSettingsAction, Action clearStoredDataAction)
         {
             rebuildDailyReports = rebuildDailyReportsAction;
+            openSpeedReport = openSpeedReportAction;
+            showCloudSettings = showCloudSettingsAction;
+            clearStoredData = clearStoredDataAction;
             Text = L.T("監控目標設定", "Monitoring Target Settings");
             Font = new Font("Microsoft JhengHei UI", 10F);
-            ClientSize = new Size(620, 665);
+            ClientSize = new Size(620, 760);
             FormBorderStyle = FormBorderStyle.FixedDialog;
             MaximizeBox = false;
             MinimizeBox = false;
@@ -288,17 +310,31 @@ namespace NetCheck
             var languageHint = new Label { Text = L.T("下次啟動程式時套用", "Applied the next time the app starts"), AutoSize = false, Location = new Point(329, 536), Size = new Size(255, 25), ForeColor = Color.DimGray, Font = new Font(Font.FontFamily, 8.5F) };
 
             exportBackupButton.Text = L.T("匯出全部紀錄備份 ZIP", "Export All Data Backup ZIP");
-            exportBackupButton.SetBounds(51, 576, 260, 34);
+            speedSettingsButton.Text = L.T("定時測速設定（Beta）…", "Scheduled Speed Test Settings (Beta)…");
+            speedSettingsButton.SetBounds(51, 570, 534, 32);
+            speedSettingsButton.Click += delegate { EditSpeedSettings(); };
+
+            cloudSettingsButton.Text = L.T("Google Drive 備份設定…", "Google Drive Backup Settings…");
+            cloudSettingsButton.SetBounds(51, 612, 260, 34);
+            cloudSettingsButton.Enabled = showCloudSettings != null;
+            cloudSettingsButton.Click += delegate { if (showCloudSettings != null) showCloudSettings(); };
+            clearDataButton.Text = L.T("清除全部儲存資料…", "Clear All Saved Data…");
+            clearDataButton.SetBounds(325, 612, 260, 34);
+            clearDataButton.ForeColor = Color.Firebrick;
+            clearDataButton.Enabled = clearStoredData != null;
+            clearDataButton.Click += delegate { if (clearStoredData != null) clearStoredData(); };
+
+            exportBackupButton.SetBounds(51, 654, 260, 34);
             exportBackupButton.Click += delegate { ExportBackupZip(); };
             rebuildDailyReportsButton.Text = L.T("強制重製每日詳細報表", "Rebuild Daily Detail Reports");
-            rebuildDailyReportsButton.SetBounds(325, 576, 260, 34);
+            rebuildDailyReportsButton.SetBounds(325, 654, 260, 34);
             rebuildDailyReportsButton.Enabled = rebuildDailyReports != null;
             rebuildDailyReportsButton.Click += delegate { RebuildDailyReports(); };
 
             saveButton.Text = L.T("儲存", "Save");
             cancelButton.Text = L.T("取消", "Cancel");
-            saveButton.SetBounds(352, 620, 110, 30);
-            cancelButton.SetBounds(475, 620, 110, 30);
+            saveButton.SetBounds(352, 712, 110, 30);
+            cancelButton.SetBounds(475, 712, 110, 30);
             cancelButton.DialogResult = DialogResult.Cancel;
             saveButton.Click += delegate { ValidateAndClose(); };
             builtInRadio.CheckedChanged += delegate { UpdateTargetState(); };
@@ -314,10 +350,17 @@ namespace NetCheck
             advancedDiagnosticsBox.Checked = current.AdvancedDiagnosticsEnabled;
             preventSleepBox.Checked = current.PreventSleepWhileMonitoring;
             preventShutdownBox.Checked = current.PreventShutdownWhileMonitoring;
+            speedOptions = current.SpeedTest ?? SpeedTestOptions.Defaults();
             if (current.CustomTargets != null)
                 for (int i = 0; i < current.CustomTargets.Count && i < targetBoxes.Length; i++) targetBoxes[i].Text = current.CustomTargets[i];
             UpdateTargetState();
-            Controls.AddRange(new Control[] { title, intro, builtInRadio, builtInInfo, customRadio, hint, advancedDiagnosticsBox, preventSleepBox, preventShutdownBox, autoStartWindowsBox, autoStartMonitoringBox, languageLabel, languageBox, languageHint, exportBackupButton, rebuildDailyReportsButton, saveButton, cancelButton });
+            Controls.AddRange(new Control[] { title, intro, builtInRadio, builtInInfo, customRadio, hint, advancedDiagnosticsBox, preventSleepBox, preventShutdownBox, autoStartWindowsBox, autoStartMonitoringBox, languageLabel, languageBox, languageHint, speedSettingsButton, cloudSettingsButton, clearDataButton, exportBackupButton, rebuildDailyReportsButton, saveButton, cancelButton });
+        }
+
+        private void EditSpeedSettings()
+        {
+            using (var form = new SpeedTestSettingsForm(speedOptions, openSpeedReport))
+                if (form.ShowDialog(this) == DialogResult.OK) speedOptions = form.Result;
         }
 
         private void ExportBackupZip()
@@ -411,9 +454,101 @@ namespace NetCheck
                 }
             }
             SelectedLanguage = languageBox.SelectedIndex == 0 ? LanguagePreferenceStore.TraditionalChinese : LanguagePreferenceStore.English;
-            Result = new MonitorTargetSettings { UseCustomTargets = customRadio.Checked, CustomTargets = values, AutoStartWindows = autoStartWindowsBox.Checked, AutoStartMonitoring = autoStartMonitoringBox.Checked, AdvancedDiagnosticsEnabled = advancedDiagnosticsBox.Checked, PreventSleepWhileMonitoring = preventSleepBox.Checked, PreventShutdownWhileMonitoring = preventShutdownBox.Checked };
+            Result = new MonitorTargetSettings { UseCustomTargets = customRadio.Checked, CustomTargets = values, AutoStartWindows = autoStartWindowsBox.Checked, AutoStartMonitoring = autoStartMonitoringBox.Checked, AdvancedDiagnosticsEnabled = advancedDiagnosticsBox.Checked, PreventSleepWhileMonitoring = preventSleepBox.Checked, PreventShutdownWhileMonitoring = preventShutdownBox.Checked, SpeedTest = speedOptions ?? SpeedTestOptions.Defaults() };
             DialogResult = DialogResult.OK;
             Close();
+        }
+    }
+
+    internal sealed class SpeedTestSettingsForm : Form
+    {
+        private readonly CheckBox scheduledBox = new CheckBox();
+        private readonly NumericUpDown intervalBox = new NumericUpDown();
+        private readonly ComboBox levelBox = new ComboBox();
+        private readonly CheckBox meteredBox = new CheckBox();
+        private readonly Button speedReportButton = new Button();
+        private readonly LinkLabel speedtestLink = new LinkLabel();
+        private readonly LinkLabel hinetLink = new LinkLabel();
+        private readonly bool originallyScheduled;
+        private readonly bool originallyMetered;
+        private readonly SpeedTestOptions currentOptions;
+        private readonly Action openSpeedReport;
+        private DateTime lastScheduledRunUtc;
+        internal SpeedTestOptions Result { get; private set; }
+
+        internal SpeedTestSettingsForm(SpeedTestOptions current) : this(current, null) { }
+
+        internal SpeedTestSettingsForm(SpeedTestOptions current, Action openSpeedReportAction)
+        {
+            current = current ?? SpeedTestOptions.Defaults();
+            currentOptions = current;
+            openSpeedReport = openSpeedReportAction;
+            originallyScheduled = current.ScheduledEnabled;
+            originallyMetered = current.AllowMeteredNetwork;
+            lastScheduledRunUtc = current.LastScheduledRunUtc;
+            Text = L.T("定時測速設定（Beta）", "Scheduled Speed Test Settings (Beta)");
+            Font = new Font("Microsoft JhengHei UI", 10F);
+            ClientSize = new Size(620, 570);
+            FormBorderStyle = FormBorderStyle.FixedDialog; MaximizeBox = false; MinimizeBox = false; StartPosition = FormStartPosition.CenterParent;
+            var title = new Label { Text = L.T("Cloudflare 定時網路測速（Beta）", "Cloudflare Scheduled Speed Test (Beta)"), Font = new Font(Font.FontFamily, 17F, FontStyle.Bold), AutoSize = true, Location = new Point(24, 20) };
+            var warning = new Label { Text = L.T("本功能使用 Cloudflare 測速服務，實測結果可能與 Speedtest／中華電信測速不同，僅供網路趨勢與叫修參考。測速會使用大量流量並可能暫時占用頻寬。", "This feature uses Cloudflare's speed-test service. Results may differ from Speedtest or Chunghwa Telecom and are for trend and troubleshooting reference only. Tests use substantial data and may temporarily consume bandwidth."), AutoSize = false, Location = new Point(27, 64), Size = new Size(565, 66), ForeColor = Color.Firebrick };
+            scheduledBox.Text = L.T("啟用定時測速（僅在監控中且未暫停時執行）", "Enable scheduled speed tests (only while monitoring and not paused)"); scheduledBox.SetBounds(28, 139, 560, 28);
+            var intervalLabel = new Label { Text = L.T("定時間隔", "Schedule interval"), AutoSize = true, Location = new Point(51, 184) };
+            intervalBox.Minimum = 1; intervalBox.Maximum = 168; intervalBox.Value = Math.Max(1, Math.Min(168, current.IntervalHours <= 0 ? 24 : current.IntervalHours)); intervalBox.SetBounds(160, 179, 90, 28);
+            var hourLabel = new Label { Text = L.T("小時（預設 24，最短 1 小時）", "hours (default 24, minimum 1 hour)"), AutoSize = true, Location = new Point(260, 184) };
+            var levelLabel = new Label { Text = L.T("定時測速等級", "Scheduled test level"), AutoSize = true, Location = new Point(51, 227) };
+            levelBox.DropDownStyle = ComboBoxStyle.DropDownList; levelBox.Items.AddRange(new object[] { L.T("快速（最多約 25 MB）", "Quick (up to about 25 MB)"), L.T("標準（最多約 130 MB）", "Standard (up to about 130 MB)"), L.T("完整（最多約 400 MB）", "Full (up to about 400 MB)") }); levelBox.SetBounds(190, 222, 300, 28); levelBox.SelectedIndex = current.EffectiveLevel == SpeedTestLevel.Quick ? 0 : current.EffectiveLevel == SpeedTestLevel.Full ? 2 : 1;
+            meteredBox.Text = L.T("允許在 Windows 計量付費網路執行定時測速", "Allow scheduled tests on Windows metered connections"); meteredBox.SetBounds(51, 269, 520, 28);
+            var meteredHint = new Label { Text = L.T("預設不允許。若允許，每次執行前仍會再次警告。兩次測速至少間隔 15 分鐘；伺服器拒絕時會自動延長冷卻。", "Disabled by default. If enabled, every run still warns first. Tests are at least 15 minutes apart, with longer cooldown after server rejection."), AutoSize = false, Location = new Point(74, 300), Size = new Size(510, 45), ForeColor = Color.DimGray, Font = new Font(Font.FontFamily, 8.5F) };
+            speedReportButton.Text = L.T("開啟速度趨勢報表", "Open Speed Trend Report");
+            speedReportButton.SetBounds(51, 357, 220, 34);
+            speedReportButton.Enabled = openSpeedReport != null;
+            speedReportButton.Click += delegate { if (openSpeedReport != null) openSpeedReport(); };
+            var compareLabel = new Label { Text = L.T("可另行比較其他測速服務：", "Compare with other speed-test services:"), AutoSize = true, Location = new Point(51, 412), ForeColor = Color.DimGray };
+            speedtestLink.Text = "Speedtest by Ookla"; speedtestLink.AutoSize = true; speedtestLink.Location = new Point(51, 443);
+            hinetLink.Text = L.T("中華電信 HiNet 測速", "Chunghwa Telecom HiNet Speed Test"); hinetLink.AutoSize = true; hinetLink.Location = new Point(245, 443);
+            speedtestLink.LinkClicked += delegate { OpenExternalLink("https://www.speedtest.net/"); };
+            hinetLink.LinkClicked += delegate { OpenExternalLink("https://speed.hinet.net/agreement.html"); };
+            var save = new Button { Text = L.T("儲存", "Save") }; var cancel = new Button { Text = L.T("取消", "Cancel"), DialogResult = DialogResult.Cancel }; save.SetBounds(374, 518, 100, 32); cancel.SetBounds(488, 518, 100, 32); save.Click += delegate { Save(); };
+            scheduledBox.Checked = current.ScheduledEnabled; meteredBox.Checked = current.AllowMeteredNetwork;
+            scheduledBox.CheckedChanged += delegate { UpdateEnabled(); }; UpdateEnabled(); AcceptButton = save; CancelButton = cancel;
+            Controls.AddRange(new Control[] { title, warning, scheduledBox, intervalLabel, intervalBox, hourLabel, levelLabel, levelBox, meteredBox, meteredHint, speedReportButton, compareLabel, speedtestLink, hinetLink, save, cancel });
+        }
+
+        private void UpdateEnabled()
+        {
+            intervalBox.Enabled = levelBox.Enabled = meteredBox.Enabled = scheduledBox.Checked;
+        }
+        private void OpenExternalLink(string url)
+        {
+            try { Process.Start(new ProcessStartInfo(url) { UseShellExecute = true }); }
+            catch (Exception ex) { MessageBox.Show(L.T("無法開啟網頁：", "Could not open the webpage: ") + ex.Message, Text, MessageBoxButtons.OK, MessageBoxIcon.Error); }
+        }
+        private void Save()
+        {
+            if (scheduledBox.Checked && !originallyScheduled)
+            {
+                if (MessageBox.Show(L.T("定時測速會依設定週期自動下載及上傳資料，可能占用頻寬並產生網路流量費用。是否仍要啟用？", "Scheduled speed tests automatically download and upload data at the selected interval, may use bandwidth, and may incur data charges. Enable anyway?"), Text, MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes) return;
+                if (MessageBox.Show(L.T("請再次確認：測速結果僅供參考，作者與程式不對流量費用、網路降速或測量差異負責。確定接受並啟用嗎？", "Confirm again: results are informational only. The author and app are not responsible for data charges, temporary slowdown, or measurement differences. Accept and enable?"), Text, MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes) return;
+            }
+            if (meteredBox.Checked && !originallyMetered)
+            {
+                if (MessageBox.Show(L.T("計量付費網路可能依流量收費。允許自動測速可能造成額外費用，確定要開放嗎？", "Metered networks may charge by usage. Allowing automatic speed tests may cause extra charges. Continue?"), Text, MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes) return;
+                if (MessageBox.Show(L.T("最後確認：即使已允許，實際執行時仍會再次詢問。是否儲存此設定？", "Final confirmation: the app will still ask again before each metered scheduled test. Save this setting?"), Text, MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes) return;
+            }
+            SpeedTestLevel level = levelBox.SelectedIndex == 0 ? SpeedTestLevel.Quick : levelBox.SelectedIndex == 2 ? SpeedTestLevel.Full : SpeedTestLevel.Standard;
+            Result = new SpeedTestOptions
+            {
+                ScheduledEnabled = scheduledBox.Checked,
+                IntervalHours = (int)intervalBox.Value,
+                Level = level.ToString(),
+                AllowMeteredNetwork = meteredBox.Checked,
+                LastScheduledRunUtc = lastScheduledRunUtc,
+                LastAttemptUtc = currentOptions.LastAttemptUtc,
+                ServerCooldownUntilUtc = currentOptions.ServerCooldownUntilUtc,
+                RateLimitBackoffLevel = currentOptions.RateLimitBackoffLevel
+            };
+            DialogResult = DialogResult.OK; Close();
         }
     }
 }
