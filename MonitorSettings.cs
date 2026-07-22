@@ -294,7 +294,7 @@ namespace NetCheck
             advancedDiagnosticsBox.SetBounds(51, 380, 535, 30);
             preventSleepBox.Text = L.T("監控期間防止電腦進入休眠（建議）", "Prevent the computer from sleeping while monitoring (recommended)");
             preventSleepBox.SetBounds(51, 412, 535, 26);
-            preventShutdownBox.Text = L.T("監控期間阻止 Windows 關機或重新啟動（請先停止監控）", "Block Windows shutdown or restart while monitoring (stop monitoring first)");
+            preventShutdownBox.Text = L.T("監控期間阻止 Windows 關機或重新啟動（請使用程式內關閉按鈕）", "Block Windows shutdown or restart while monitoring (use the in-app exit button)");
             preventShutdownBox.SetBounds(51, 439, 555, 26);
             autoStartWindowsBox.Text = L.T("登入 Windows 後自動啟動程式", "Start the app after Windows sign-in");
             autoStartWindowsBox.SetBounds(51, 471, 535, 26);

@@ -204,20 +204,18 @@ namespace NetCheck
             pauseButton.Text = L.T("暫停", "Pause");
             reportButton.Text = L.T("查看報表", "View Report");
             dataButton.Text = L.T("下載報表 PDF 文件", "Download PDF Report");
-            exitButton.Text = L.T("關閉程式", "Exit");
+            exitButton.Text = L.T("關閉程式並停止監控", "Exit and Stop Monitoring");
             aboutButton.Text = L.T("關於", "About");
             settingsButton.Text = L.T("設定", "Settings");
             eventNoteButton.Text = L.T("事件註記", "Event Note");
             startButton.SetBounds(25, 112, 145, 38);
             startButton.Font = new Font(Font.FontFamily, 10F, FontStyle.Bold);
-            startButton.FlatStyle = FlatStyle.Flat;
-            startButton.UseVisualStyleBackColor = false;
-            UpdateStartStopButton(false);
+            UpdateStartButton(false);
             pauseButton.SetBounds(180, 112, 95, 38);
             eventNoteButton.SetBounds(285, 112, 110, 38);
             reportButton.SetBounds(405, 112, 120, 38);
             dataButton.SetBounds(535, 112, 220, 38);
-            exitButton.SetBounds(650, 542, 105, 24);
+            exitButton.SetBounds(565, 542, 190, 24);
             exitButton.Font = new Font(Font.FontFamily, 8.5F, FontStyle.Bold);
             exitButton.ForeColor = Color.Firebrick;
             exitButton.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
@@ -257,7 +255,7 @@ namespace NetCheck
 
             Controls.AddRange(new Control[] { title, versionLabel, stateLabel, intervalLabel, intervalBox, startButton, pauseButton, reportButton, dataButton, lastLabel, statsLabel, networkInfoLabel, recentList, exitButton, aboutButton, settingsButton, eventNoteButton });
 
-            startButton.Click += delegate { if (running) StopMonitoring(false); else StartMonitoring(); };
+            startButton.Click += delegate { if (!running) StartMonitoring(); };
             pauseButton.Click += delegate { TogglePause(); };
             reportButton.Click += delegate { if (running) CreateLiveReport(true); else OpenReport(); };
             dataButton.Click += delegate { ShowDataManager(); };
@@ -345,8 +343,7 @@ namespace NetCheck
             running = true;
             paused = false;
             intervalBox.Enabled = false;
-            UpdateStartStopButton(true);
-            startButton.Enabled = true;
+            UpdateStartButton(true);
             settingsButton.Enabled = true;
             pauseButton.Enabled = true;
             eventNoteButton.Enabled = true;
@@ -490,7 +487,7 @@ namespace NetCheck
         {
             if (running || (cloudManager != null && cloudManager.BackupInProgress))
             {
-                MessageBox.Show(L.T("目前正在監控或雲端備份，不能清除資料。請等待工作完成並結束監控後再清除。", "Saved data cannot be cleared while monitoring or a cloud backup is in progress. Wait for the work to finish and stop monitoring first."), L.T("無法清除", "Unable to Clear"), MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show(L.T("目前正在監控或雲端備份，不能清除資料。請等待工作完成；若正在監控，請使用「關閉程式並停止監控」，重新開啟後再清除。", "Saved data cannot be cleared while monitoring or a cloud backup is in progress. Wait for the work to finish; if monitoring is active, use Exit and Stop Monitoring, reopen the app, and then clear the data."), L.T("無法清除", "Unable to Clear"), MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
             if (MessageBox.Show(L.T("這會刪除 NetCheck 管理的所有 CSV、HTML、即時報表與本機備援資料。\n\n自行下載到其他資料夾的 PDF 不會被刪除。此動作無法復原，確定繼續嗎？", "This will delete all CSV, HTML, live-report, and local recovery files managed by NetCheck.\n\nPDF files downloaded to other folders will not be deleted. This cannot be undone. Continue?"), L.T("清除全部儲存資料", "Clear All Saved Data"), MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes) return;
@@ -886,8 +883,7 @@ namespace NetCheck
             reportButton.Text = L.T("查看報表", "View Report");
             reportButton.Enabled = true;
             intervalBox.Enabled = false;
-            UpdateStartStopButton(true);
-            startButton.Enabled = true;
+            UpdateStartButton(true);
             settingsButton.Enabled = true;
             pauseButton.Enabled = true;
             eventNoteButton.Enabled = true;
@@ -1003,8 +999,7 @@ namespace NetCheck
             ResetOutageTracking();
             UpdatePowerProtection();
             intervalBox.Enabled = true;
-            UpdateStartStopButton(false);
-            startButton.Enabled = true;
+            UpdateStartButton(false);
             settingsButton.Enabled = true;
             pauseButton.Enabled = false;
             eventNoteButton.Enabled = false;
@@ -1017,15 +1012,14 @@ namespace NetCheck
             if (openReport) OpenReport();
         }
 
-        private void UpdateStartStopButton(bool monitoring)
+        private void UpdateStartButton(bool monitoring)
         {
-            startButton.Text = monitoring ? L.T("停止監控", "Stop Monitoring") : L.T("開始監控", "Start Monitoring");
-            startButton.BackColor = monitoring ? Color.Firebrick : Color.SeaGreen;
-            startButton.ForeColor = Color.White;
-            startButton.FlatAppearance.BorderColor = monitoring ? Color.DarkRed : Color.DarkGreen;
-            startButton.FlatAppearance.BorderSize = 2;
-            startButton.FlatAppearance.MouseOverBackColor = monitoring ? Color.Crimson : Color.MediumSeaGreen;
-            startButton.FlatAppearance.MouseDownBackColor = monitoring ? Color.DarkRed : Color.DarkGreen;
+            startButton.Text = L.T("開始監控", "Start Monitoring");
+            startButton.FlatStyle = FlatStyle.Standard;
+            startButton.BackColor = SystemColors.Control;
+            startButton.ForeColor = SystemColors.ControlText;
+            startButton.UseVisualStyleBackColor = true;
+            startButton.Enabled = !monitoring;
         }
 
         private bool SaveAndFinalizeForExit()
@@ -1067,7 +1061,7 @@ namespace NetCheck
         {
             if (Volatile.Read(ref speedTestRunning) == 1)
             {
-                if (MessageBox.Show(L.T("測速仍在進行。要先取消測速並等待紀錄儲存完成嗎？完成後請再次按「關閉程式」。", "A speed test is still running. Cancel it and wait for its record to be saved? Select Exit again after it finishes."), L.T("測速尚未完成", "Speed Test in Progress"), MessageBoxButtons.YesNo, MessageBoxIcon.Warning) == DialogResult.Yes) CancelSpeedTest();
+                if (MessageBox.Show(L.T("測速仍在進行。要先取消測速並等待紀錄儲存完成嗎？完成後請再次按「關閉程式並停止監控」。", "A speed test is still running. Cancel it and wait for its record to be saved? Select Exit and Stop Monitoring again after it finishes."), L.T("測速尚未完成", "Speed Test in Progress"), MessageBoxButtons.YesNo, MessageBoxIcon.Warning) == DialogResult.Yes) CancelSpeedTest();
                 return;
             }
             if (cloudManager != null && cloudManager.BackupInProgress)
@@ -1653,7 +1647,7 @@ namespace NetCheck
             bool blockShutdown = ShouldBlockWindowsShutdown();
             if (blockShutdown && IsHandleCreated && !shutdownBlockReasonActive)
             {
-                shutdownBlockReasonActive = ShutdownBlockReasonCreate(Handle, L.T("NetCheckMonitor 正在進行長時間網路監控；請先停止監控再關機。", "NetCheckMonitor is running a long-term network test. Stop monitoring before shutting down."));
+                shutdownBlockReasonActive = ShutdownBlockReasonCreate(Handle, L.T("NetCheckMonitor 正在進行長時間網路監控；請先使用程式內的「關閉程式並停止監控」按鈕。", "NetCheckMonitor is running a long-term network test. Use the in-app Exit and Stop Monitoring button first."));
             }
             else if (!blockShutdown) ReleaseShutdownBlockReason();
         }
@@ -1701,7 +1695,7 @@ namespace NetCheck
                 {
                     try { UiPreferenceStore.MarkCloseToTrayNoticeShown(); } catch { }
                     MessageBox.Show(
-                        L.T("按下右上角 X 只會將程式縮小到系統匣，監控仍可在背景執行。\n\n若要確認資料已儲存並結束程式，請按主畫面右下角的「關閉程式」按鈕。\n\n此訊息只會顯示一次。", "Selecting the X button only minimizes the app to the system tray, and monitoring can continue in the background.\n\nTo verify that data is saved and exit the app, use the Exit button in the lower-right corner of the main window.\n\nThis message is shown only once."),
+                        L.T("按下右上角 X 只會將程式縮小到系統匣，監控仍可在背景執行。\n\n若要確認資料已儲存、停止監控並結束程式，請按主畫面右下角的「關閉程式並停止監控」按鈕。\n\n此訊息只會顯示一次。", "Selecting the X button only minimizes the app to the system tray, and monitoring can continue in the background.\n\nTo verify that data is saved, stop monitoring, and exit the app, use the Exit and Stop Monitoring button in the lower-right corner of the main window.\n\nThis message is shown only once."),
                         L.T("NetCheckMonitor 關閉提醒", "NetCheckMonitor Close Reminder"),
                         MessageBoxButtons.OK,
                         MessageBoxIcon.Information);
