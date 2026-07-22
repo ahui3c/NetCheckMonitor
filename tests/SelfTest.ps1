@@ -56,7 +56,7 @@ $setTrayState.Invoke($form, [object[]]@([Enum]::Parse($trayStateType, 'Idle'), $
 $onlineTrayBitmap.Dispose()
 $offlineTrayBitmap.Dispose()
 $downloadButtonLabel = $dataButton.Text -eq '下載報表 PDF 文件'
-$exitButtonLayout = $exitButton.Text -eq '關閉程式' -and $exitButton.Width -le 120 -and $exitButton.Height -le 28 -and $exitButton.Top -ge 495
+$exitButtonLayout = $exitButton.Text -eq '關閉程式並停止監控' -and $exitButton.Width -ge 170 -and $exitButton.Height -le 28 -and $exitButton.Top -ge 495
 $mainManagementButtonsRemoved = $null -eq $type.GetField('clearDataButton', $flags) -and $null -eq $type.GetField('cloudButton', $flags) -and $null -eq $type.GetField('stopButton', $flags)
 $reportFormType = $assembly.GetType('NetCheck.DataReportForm', $true)
 $reportForm = [Activator]::CreateInstance($reportFormType, [object[]]@([Environment]::MachineName, 'A1B2C3D4'))
@@ -80,7 +80,7 @@ $settingsFormType = $assembly.GetType('NetCheck.MonitorSettingsForm', $true)
 $builtInTargets = $type.GetField('TestUrls', $staticFlags).GetValue($null)
 $settingsForm = [Activator]::CreateInstance($settingsFormType, [object[]]@($monitorSettingsValue, [Action]{ }, [Action]{ }, [Action]{ }, [Action]{ }))
 $settingsFormText = @($settingsForm.Controls | ForEach-Object { $_.Text }) -join "`n"
-$settingsPageContent = $settingsForm.Text -eq '監控目標設定' -and $settingsFormText.Contains('使用內建測試目標（建議）') -and $settingsFormText.Contains('使用自訂測試目標') -and $settingsFormText.Contains('目標 1') -and $settingsFormText.Contains('目標 2') -and $settingsFormText.Contains('目標 3') -and $settingsFormText.Contains('HTTPS 失敗時執行進階分層連線診斷（選用）') -and $settingsFormText.Contains('監控期間防止電腦進入休眠（建議）') -and $settingsFormText.Contains('監控期間阻止 Windows 關機或重新啟動（請先停止監控）') -and $settingsFormText.Contains('登入 Windows 後自動啟動程式') -and $settingsFormText.Contains('程式啟動後自動開始監控') -and $settingsFormText.Contains('介面語言') -and $settingsFormText.Contains('下次啟動程式時套用') -and $settingsFormText.Contains('定時測速設定（Beta）…') -and $settingsFormText.Contains('Google Drive 備份設定…') -and $settingsFormText.Contains('清除全部儲存資料…') -and $settingsFormText.Contains('匯出全部紀錄備份 ZIP') -and $settingsFormText.Contains('強制重製每日詳細報表')
+$settingsPageContent = $settingsForm.Text -eq '監控目標設定' -and $settingsFormText.Contains('使用內建測試目標（建議）') -and $settingsFormText.Contains('使用自訂測試目標') -and $settingsFormText.Contains('目標 1') -and $settingsFormText.Contains('目標 2') -and $settingsFormText.Contains('目標 3') -and $settingsFormText.Contains('HTTPS 失敗時執行進階分層連線診斷（選用）') -and $settingsFormText.Contains('監控期間防止電腦進入休眠（建議）') -and $settingsFormText.Contains('監控期間阻止 Windows 關機或重新啟動（請使用程式內關閉按鈕）') -and $settingsFormText.Contains('登入 Windows 後自動啟動程式') -and $settingsFormText.Contains('程式啟動後自動開始監控') -and $settingsFormText.Contains('介面語言') -and $settingsFormText.Contains('下次啟動程式時套用') -and $settingsFormText.Contains('定時測速設定（Beta）…') -and $settingsFormText.Contains('Google Drive 備份設定…') -and $settingsFormText.Contains('清除全部儲存資料…') -and $settingsFormText.Contains('匯出全部紀錄備份 ZIP') -and $settingsFormText.Contains('強制重製每日詳細報表')
 $settingsHidesBuiltInTargets = @($builtInTargets | Where-Object { $settingsFormText.Contains($_) }).Count -eq 0
 $settingsCustomRadio = $settingsFormType.GetField('customRadio', $flags).GetValue($settingsForm)
 $settingsSaveButton = $settingsFormType.GetField('saveButton', $flags).GetValue($settingsForm)
@@ -179,7 +179,7 @@ $emptyLines = @(
 [IO.File]::WriteAllLines($emptyCsv, $emptyLines, (New-Object Text.UTF8Encoding($true)))
 
 $type.GetMethod('StartMonitoring', $flags).Invoke($form, @())
-$startStopRunningState = $startButton.Enabled -and $startButton.Text -eq '停止監控' -and $startButton.BackColor -eq [Drawing.Color]::Firebrick -and $startButton.ForeColor -eq [Drawing.Color]::White -and $startButton.FlatStyle -eq [Windows.Forms.FlatStyle]::Flat -and $reportButton.Text -eq '查看報表' -and $null -eq $type.GetField('stopButton', $flags)
+$startButtonRunningState = -not $startButton.Enabled -and $startButton.Text -eq '開始監控' -and $startButton.FlatStyle -eq [Windows.Forms.FlatStyle]::Standard -and $startButton.UseVisualStyleBackColor -and $reportButton.Text -eq '查看報表' -and $null -eq $type.GetField('stopButton', $flags)
 $type.GetMethod('AddEventNote', $flags).Invoke($form, @('測試事件：重開數據機'))
 $activeStateCreated = Test-Path -LiteralPath $env:NETCHECK_SESSION_STATE
 $activeTargets = $type.GetField('activeTestUrls', $flags).GetValue($form)
@@ -198,7 +198,7 @@ Start-Sleep -Seconds 18
 $type.GetMethod('CreateLiveReport', $flags).Invoke($form, @($false))
 $liveHtml = Get-ChildItem -LiteralPath (Join-Path $testRoot 'NetCheck_Data') -Filter '*_Live.html' | Select-Object -First 1
 $exitSaveCompleted = $type.GetMethod('SaveAndFinalizeForExit', $flags).Invoke($form, @())
-$startStopToggle = $startStopRunningState -and $startButton.Enabled -and $startButton.Text -eq '開始監控' -and $startButton.BackColor -eq [Drawing.Color]::SeaGreen -and $startButton.ForeColor -eq [Drawing.Color]::White -and $reportButton.Text -eq '查看報表'
+$startButtonSinglePurpose = $startButtonRunningState -and $startButton.Enabled -and $startButton.Text -eq '開始監控' -and $startButton.FlatStyle -eq [Windows.Forms.FlatStyle]::Standard -and $startButton.UseVisualStyleBackColor -and $reportButton.Text -eq '查看報表'
 $activeStateCleared = -not (Test-Path -LiteralPath $env:NETCHECK_SESSION_STATE)
 $settingsReenabledAfterMonitoring = $settingsButton.Enabled
 $idleClosingArgs = New-Object System.Windows.Forms.FormClosingEventArgs([System.Windows.Forms.CloseReason]::UserClosing, $false)
@@ -215,7 +215,7 @@ $checkTimes = @($rows | Where-Object Type -eq 'CHECK' | ForEach-Object { [DateTi
 $fastRetrySpacing = $false
 for ($i = 1; $i -lt $checkTimes.Count; $i++) { $seconds = ($checkTimes[$i] - $checkTimes[$i - 1]).TotalSeconds; if ($seconds -ge 3 -and $seconds -le 8) { $fastRetrySpacing = $true } }
 $sourceText = Get-Content -LiteralPath (Join-Path $root 'NetCheck.cs') -Raw
-$closeReminderText = $sourceText.Contains('按下右上角 X 只會將程式縮小到系統匣') -and $sourceText.Contains('主畫面右下角的「關閉程式」按鈕') -and $sourceText.Contains('This message is shown only once.')
+$closeReminderText = $sourceText.Contains('按下右上角 X 只會將程式縮小到系統匣') -and $sourceText.Contains('主畫面右下角的「關閉程式並停止監控」按鈕') -and $sourceText.Contains('This message is shown only once.')
 $boundedOutageBackoff = $sourceText -match 'consecutiveFailures\s*<=\s*FastRetryLimit' -and
     $sourceText -match 'Math\.Min\(checkIntervalSeconds,\s*OutageBackoffSeconds\)'
 $powerProtectionIntegration = $sourceText.Contains('SetThreadExecutionState(preventSleep ? ES_CONTINUOUS | ES_SYSTEM_REQUIRED : ES_CONTINUOUS)') -and $sourceText.Contains('message.Msg == WM_QUERYENDSESSION && ShouldBlockWindowsShutdown()') -and $sourceText.Contains('ShutdownBlockReasonCreate')
@@ -373,7 +373,7 @@ $result = [PSCustomObject]@{
     ClearRemovedFromPdfDialog = $clearRemovedFromPdfDialog
     MainManagementButtonsRemoved = $mainManagementButtonsRemoved
     SettingsManagementButtons = $settingsManagementButtons
-    StartStopToggle = $startStopToggle
+    StartButtonSinglePurpose = $startButtonSinglePurpose
     AboutButtonLayout = $aboutButtonLayout
     SettingsButtonLayout = $settingsButtonLayout
     EventNoteButtonLayout = $eventNoteButtonLayout
@@ -446,7 +446,7 @@ if (-not $result.CsvCreated -or -not $result.HtmlCreated -or -not $result.LiveHt
     -not $result.ReportHasDailyStats -or -not $result.ReportHasEnhancedSummary -or -not $result.ReportHasNetworkInfo -or -not $result.ReportHasAdvancedDiagnostics -or -not $result.ReportHasEventNotes -or -not $result.ArchiveReportHasNetworkInfo -or -not $result.ArchiveReportHasAdvancedDiagnostics -or -not $result.ArchiveReportHasEventNotes -or -not $result.ArchiveReportHasDailyDetails -or -not $result.ReportHasComputer -or -not $result.ComputerMarker -or -not $result.TargetMarker -or -not $result.NetworkMarker -or -not $result.PowerProtectionMarker -or -not $result.EventNoteMarker -or -not $result.SuspectedCheck -or -not $result.ConfirmedOfflineCheck -or -not $result.OutageConfirmedMarker -or -not $result.FastRetrySpacing -or -not $result.BoundedOutageBackoff -or -not $result.UniqueFileName -or
     -not $result.DailyOutageCalculated -or -not $result.AllPdfCreated -or -not $result.DatePdfCreated -or -not $result.ClearAllPassed -or
     -not $result.DownloadButtonLabel -or -not $result.ExitButtonLayout -or -not $result.ExitSaveCompleted -or -not $result.ClearRemovedFromPdfDialog -or
-    -not $result.MainManagementButtonsRemoved -or -not $result.SettingsManagementButtons -or -not $result.StartStopToggle -or -not $result.AboutButtonLayout -or -not $result.SettingsButtonLayout -or -not $result.EventNoteButtonLayout -or -not $result.HomeSpeedButtonsRemoved -or -not $result.SpeedSettingsPageContent -or -not $result.HomeVersionLabel -or -not $result.NetworkStatusCapture -or -not $result.NetworkInfoLabel -or -not $result.OnlineTrayStatus -or -not $result.OfflineTrayStatus -or -not $result.MonitorSettingsStorage -or -not $result.PortableSettingsMigration -or -not $result.AdvancedDiagnosticsClassification -or -not $result.AdvancedToggleNoRestart -or -not $result.PowerProtectionIntegration -or -not $result.ShutdownBlockDecision -or -not $result.CloseReminderStoredOnce -or -not $result.SessionStateStorage -or -not $result.ActiveStateCreated -or -not $result.ActiveStateCleared -or -not $result.ApplicationRestartRegistered -or -not $result.SingleInstanceGuard -or -not $result.DuplicateLaunchShowsExisting -or -not $result.SessionResumeIntegration -or -not $result.AutoStartMonitoring -or -not $result.RecoveryBeforeAutoStart -or -not $result.SettingsPageContent -or -not $result.SettingsLanguageSelection -or -not $result.SettingsHidesBuiltInTargets -or -not $result.SettingsCompactLayout -or -not $result.CustomTargetSequence -or -not $result.SettingsAvailableDuringMonitoring -or -not $result.EventNoteAvailableDuringMonitoring -or -not $result.EventNoteDialogContent -or -not $result.SettingsRestartIntegration -or -not $result.SettingsReenabledAfterMonitoring -or -not $result.AboutPageContent -or -not $result.AboutUrlLinkScope -or -not $result.UpdateVersionComparison -or -not $result.Tls12UpdateCheck -or -not $result.ProgramIdentity -or -not $result.CustomIconEmbedded -or -not $result.CloudDailyPdf -or -not $result.CloudDailyCsv -or -not $result.CloudStorageProtected -or
+    -not $result.MainManagementButtonsRemoved -or -not $result.SettingsManagementButtons -or -not $result.StartButtonSinglePurpose -or -not $result.AboutButtonLayout -or -not $result.SettingsButtonLayout -or -not $result.EventNoteButtonLayout -or -not $result.HomeSpeedButtonsRemoved -or -not $result.SpeedSettingsPageContent -or -not $result.HomeVersionLabel -or -not $result.NetworkStatusCapture -or -not $result.NetworkInfoLabel -or -not $result.OnlineTrayStatus -or -not $result.OfflineTrayStatus -or -not $result.MonitorSettingsStorage -or -not $result.PortableSettingsMigration -or -not $result.AdvancedDiagnosticsClassification -or -not $result.AdvancedToggleNoRestart -or -not $result.PowerProtectionIntegration -or -not $result.ShutdownBlockDecision -or -not $result.CloseReminderStoredOnce -or -not $result.SessionStateStorage -or -not $result.ActiveStateCreated -or -not $result.ActiveStateCleared -or -not $result.ApplicationRestartRegistered -or -not $result.SingleInstanceGuard -or -not $result.DuplicateLaunchShowsExisting -or -not $result.SessionResumeIntegration -or -not $result.AutoStartMonitoring -or -not $result.RecoveryBeforeAutoStart -or -not $result.SettingsPageContent -or -not $result.SettingsLanguageSelection -or -not $result.SettingsHidesBuiltInTargets -or -not $result.SettingsCompactLayout -or -not $result.CustomTargetSequence -or -not $result.SettingsAvailableDuringMonitoring -or -not $result.EventNoteAvailableDuringMonitoring -or -not $result.EventNoteDialogContent -or -not $result.SettingsRestartIntegration -or -not $result.SettingsReenabledAfterMonitoring -or -not $result.AboutPageContent -or -not $result.AboutUrlLinkScope -or -not $result.UpdateVersionComparison -or -not $result.Tls12UpdateCheck -or -not $result.ProgramIdentity -or -not $result.CustomIconEmbedded -or -not $result.CloudDailyPdf -or -not $result.CloudDailyCsv -or -not $result.CloudStorageProtected -or
     -not $result.OAuthBuiltInClient -or -not $result.OAuthRequestForms -or -not $result.OAuthLoginOnlyUi -or -not $result.LanguageRouting -or -not $result.LanguageStorage -or -not $result.FirstRunLanguageSelection -or -not $result.EnglishUi) {
     throw 'NetCheck self-test failed.'
 }

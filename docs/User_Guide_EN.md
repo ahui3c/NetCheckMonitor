@@ -15,12 +15,12 @@ NetCheckMonitor periodically tests public Internet connectivity, records outages
 1. Run `NetCheckMonitor.exe`.
 2. The default interval is 60 seconds. You may change it before starting.
 3. To use your own targets, open **Settings**, choose custom targets, and enter one to three websites or IP addresses.
-4. Select the green **Start Monitoring** button. It changes to a red **Stop Monitoring** button while active. The program keeps running in the system tray when minimized.
+4. Select **Start Monitoring**. While active, the button is disabled to prevent accidental interruption of a long-running test. The program keeps running in the system tray when minimized.
    The first failure triggers a fast retry after 5 seconds. Consecutive failures confirm an outage. Prolonged outages automatically use a lower retry frequency, but the interval never exceeds the period configured on the main screen.
    The system tray icon remains visible while monitoring: green means online, red means a confirmed outage, orange means checking, and gray means paused.
    The main window shows the current adapter, connection type (wired/Wi-Fi/VPN), and Wi-Fi signal percentage. Adapter changes are stored in CSV, HTML, and PDF reports.
 5. Select **Pause** when a period should not be counted, then **Resume** to continue. The period remains marked but is excluded from statistics.
-6. Select **View Report** during monitoring to update and open the cumulative HTML report. When finished, select the red **Stop Monitoring** button to save the data and final report safely.
+6. Select **View Report** during monitoring to update and open the cumulative HTML report. To finish testing, use **Exit and Stop Monitoring** in the lower-right corner to save the data and final report safely.
 
 ## Event notes
 
@@ -40,7 +40,7 @@ NetCheckMonitor periodically tests public Internet connectivity, records outages
 - You can independently enable **Start the app after Windows sign-in** and **Start monitoring automatically when the app opens**. Recovery of an unfinished session is handled before a new automatic session starts.
 - Startup checks for an existing NetCheckMonitor instance. A duplicate launch shows the existing window instead of starting another monitoring process.
 - Settings remain available while monitoring. Target changes safely save the current session and report, then automatically start a new monitoring session. Changing only startup options does not interrupt the current session.
-- Sleep protection and Windows shutdown/restart protection are separate options. Sleep protection is enabled by default; shutdown protection is disabled by default. When shutdown protection is enabled, stop monitoring or use **Exit** before shutting down. Forced updates, power loss, and hardware resets can still interrupt the app.
+- Sleep protection and Windows shutdown/restart protection are separate options. Sleep protection is enabled by default; shutdown protection is disabled by default. When shutdown protection is enabled, use **Exit and Stop Monitoring** before shutting down. Forced updates, power loss, and hardware resets can still interrupt the app.
 - Optional advanced layered diagnostics run only after an HTTPS failure and check the adapter, default gateway, DNS, IPv4, IPv6, HTTPS target, and Wi-Fi signal. Toggling this option while monitoring takes effect immediately without restarting the session.
 
 ## Scheduled speed-test reference (Beta)
@@ -90,8 +90,8 @@ The app requests only the `drive.file` scope. Windows DPAPI encrypts the sign-in
 ## Long-running protection
 
 - Every result is force-flushed to both the primary CSV and recovery copy.
-- The window close button and Alt+F4 minimize the app to the system tray instead of exiting. The first use shows a one-time reminder to exit safely with the lower-right **Exit** button.
-- The **Exit** button stops monitoring, saves data, and creates the final report before closing.
+- The window close button and Alt+F4 minimize the app to the system tray instead of exiting. The first use shows a one-time reminder to exit safely with the lower-right **Exit and Stop Monitoring** button.
+- **Exit and Stop Monitoring** stops monitoring, saves data, and creates the final report before closing.
 - The program requests that Windows not enter system sleep while monitoring; the display may still turn off normally.
 - Keep laptops connected to power. Closing a lid configured for sleep may still force Windows to sleep.
 - Do not unplug a USB drive containing the running program.
