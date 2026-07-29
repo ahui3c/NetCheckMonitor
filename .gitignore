@@ -10,6 +10,7 @@ NetCheck_*.csv
 NetCheck_*.html
 NetCheck_*.pdf
 settings.dat
+NetCheckMonitor.*.dat
 google-oauth-client.local.json
 *.tmp
 

@@ -39,6 +39,15 @@ namespace NetCheck
             }
         }
 
+        internal static string GmailPath
+        {
+            get
+            {
+                string value = Environment.GetEnvironmentVariable("NETCHECK_GMAIL_SETTINGS");
+                return String.IsNullOrWhiteSpace(value) ? Path.Combine(ExecutableDirectory(), "NetCheckMonitor.gmail.dat") : value;
+            }
+        }
+
         internal static string SessionPath
         {
             get

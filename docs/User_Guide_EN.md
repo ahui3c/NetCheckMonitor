@@ -1,6 +1,6 @@
 # NetCheckMonitor User Guide (English)
 
-Version: 0.9.8
+Version: 0.9.9
 
 NetCheckMonitor periodically tests public Internet connectivity, records outages, and produces graphical reports. It supports Google Drive backup and PDF downloads and is completely free, open source, and ad-free.
 
@@ -77,6 +77,18 @@ NetCheckMonitor periodically tests public Internet connectivity, records outages
 5. A complete PDF and raw CSV are uploaded each day. Existing same-name files are updated instead of duplicated.
 
 The app requests only the `drive.file` scope. Windows DPAPI encrypts the sign-in token for the current Windows account. NetCheckMonitor must remain running for an on-time backup; after a missed run, it prioritizes the most recent day at the next start.
+
+## Gmail daily reports and recovery notifications
+
+1. Open **Settings** → **Gmail Report & Notification Settings**.
+2. Select **Sign in to Gmail**, sign in with your own Google account, and grant send permission.
+3. Choose daily PDF/CSV reports, recovery notifications, and a daily delivery time, then save.
+4. Select **Send Test Email** to verify delivery.
+
+- Sender and recipient are fixed to the same signed-in account; no other address can be entered.
+- The Gmail feature requests send permission only and cannot read the mailbox.
+- A complete outage prevents immediate delivery. Recovery notices are encrypted locally and sent after connectivity returns, with automatic retry after temporary failures.
+- Gmail and Google Drive use separate sign-ins. Disconnecting Gmail removes its local token and queued notices without changing Drive backup.
 
 ## Output files and computer ID
 

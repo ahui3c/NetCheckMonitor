@@ -6,14 +6,14 @@
 
 NetCheckMonitor is a free, open-source, ad-free Windows utility that periodically checks whether a computer can reach the public Internet. It records outages over hours or days and creates graphical HTML and PDF reports suitable for troubleshooting home Internet service or documenting connection problems for an ISP.
 
-Current version: **0.9.8**
+Current version: **0.9.9**
 
-## What's new in 0.9.8
+## What's new in 0.9.9
 
-- Added an optional Cloudflare scheduled speed-test reference feature (Beta), including test levels, data-usage safeguards, and a separate speed trend report.
-- Simplified the main interface by combining Start/Stop monitoring, unifying report access, and relocating Event Note, Google Drive backup, and data clearing controls.
+- Adds Gmail daily PDF/CSV reports, outage recovery notifications, and test messages, restricted to the same signed-in Google account.
+- Fixes cumulative and speed-trend reports that could miss newer records after a data-directory move or resumed monitoring session.
 
-See the complete [0.9.8 release notes](docs/RELEASE_NOTES_0.9.8.md).
+See the complete [0.9.9 release notes](docs/RELEASE_NOTES_0.9.9.md).
 
 ## Download
 
@@ -45,6 +45,7 @@ See the complete [0.9.8 release notes](docs/RELEASE_NOTES_0.9.8.md).
 - Settings can independently launch NetCheckMonitor after Windows sign-in and start monitoring automatically when the app opens. An unfinished session is offered for recovery first.
 - Startup checks whether NetCheckMonitor is already running. A duplicate launch shows the existing window instead of creating a second monitoring process.
 - Performs scheduled daily Google Drive backups of the complete PDF and raw CSV to `Net_Check`.
+- Optionally signs in to Gmail to email the daily PDF and CSV report to that same signed-in account, send a recovery notice after a confirmed outage, and send a test message. Sender and recipient are fixed to the same account.
 - Settings can prevent Windows sleep while monitoring and can separately block shutdown or restart. When shutdown protection is enabled, use the lower-right **Exit and Stop Monitoring** button first. Forced updates, power loss, and hardware resets can still interrupt the app.
 - Speed testing is currently marked Beta and is available only as an optional scheduled Cloudflare test; the main window does not provide an on-demand test button. Quick, Standard, and Full multi-stream levels are available in Settings.
 - Optional scheduled speed tests can run every 1–168 hours (24 hours by default and disabled by default), only while monitoring is active and not paused. Metered, roaming, or over-limit connections are skipped by default; when explicitly allowed, each run still requires two warnings.
@@ -75,7 +76,18 @@ See the complete [English user guide](docs/User_Guide_EN.md).
 2. Select **Sign in to Google Drive** and authorize your own Google account in the system browser.
 3. Set the daily backup time.
 
-Users do not need to create a Google Cloud project or download credential files. The app uses a Desktop OAuth client ID with PKCE; the installed-app credential required by Google is injected only during release builds and is not committed to the public source. It requests only the `drive.file` scope, and Windows DPAPI encrypts the refresh token for the current Windows account.
+Users do not need to create a Google Cloud project or download credential files. The app uses a Desktop OAuth client ID with PKCE; the installed-app credential required by Google is injected only during release builds and is not committed to the public source. The Drive feature requests only the `drive.file` scope, and Windows DPAPI encrypts the refresh token for the current Windows account.
+
+## Gmail daily reports and recovery notifications
+
+1. Open **Settings** → **Gmail Report & Notification Settings**.
+2. Select **Sign in to Gmail**, sign in with your own Google account, and grant the `gmail.send` permission.
+3. Choose daily PDF/CSV reports, recovery notifications, and the daily delivery time, then save.
+4. Use **Send Test Email** to verify delivery. Messages can only be sent to the same signed-in account; no other recipient address can be entered.
+
+During a complete outage Gmail cannot be reached. The recovery notice is encrypted locally with DPAPI and sent after connectivity returns; temporary failures use automatic backoff and retry. Gmail and Google Drive use separate grants, and the Gmail feature does not request permission to read the mailbox.
+
+For a public release, the Google Cloud project that owns the OAuth client must enable the Gmail API and complete OAuth verification for the sensitive `gmail.send` scope. During development, add the intended accounts to the OAuth test audience.
 
 ## Data and privacy
 
@@ -83,7 +95,7 @@ Users do not need to create a Google Cloud project or download credential files.
 - The identifier is normally derived from a one-way hash of Windows MachineGuid. Raw MachineGuid, MAC addresses, and hardware serial numbers are never written to output files.
 - Primary data is stored in `NetCheck_Data` beside the executable, or in Documents when that location is not writable.
 - Recovery copies are stored in `%LOCALAPPDATA%\NetCheck\Recovery`.
-- Personal CSV, HTML, PDF, Google refresh-token, and settings files must not be committed to a public repository.
+- Personal CSV, HTML, PDF, Google refresh-token, queued-notification, and settings files must not be committed to a public repository.
 
 ## Build from source
 

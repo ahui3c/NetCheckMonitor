@@ -218,7 +218,7 @@ namespace NetCheck
             request.Method = "GET";
             request.Timeout = 45000;
             request.ReadWriteTimeout = 45000;
-            request.UserAgent = "NetCheckMonitor/0.9.8";
+            request.UserAgent = "NetCheckMonitor/0.9.9";
             request.KeepAlive = true;
             request.AutomaticDecompression = DecompressionMethods.None;
             cancellation.SetActive(request);
@@ -247,7 +247,7 @@ namespace NetCheck
             request.AllowWriteStreamBuffering = false;
             request.Timeout = 45000;
             request.ReadWriteTimeout = 45000;
-            request.UserAgent = "NetCheckMonitor/0.9.8";
+            request.UserAgent = "NetCheckMonitor/0.9.9";
             request.KeepAlive = true;
             request.ServicePoint.Expect100Continue = false;
             cancellation.SetActive(request);

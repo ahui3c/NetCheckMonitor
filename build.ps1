@@ -54,6 +54,7 @@ $sources = @(
     (Join-Path $root 'SpeedReport.cs'),
     (Join-Path $root 'MonitorSettings.cs'),
     (Join-Path $root 'SessionRecovery.cs'),
+    (Join-Path $root 'GmailNotification.cs'),
     (Join-Path $root 'NetCheck.cs'),
     (Join-Path $root 'DataReport.cs'),
     (Join-Path $root 'CloudBackup.cs')

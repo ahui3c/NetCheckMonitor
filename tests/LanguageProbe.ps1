@@ -6,6 +6,7 @@ param(
 $ErrorActionPreference = 'Stop'
 $env:NETCHECK_UI_LANGUAGE = $Language
 $env:NETCHECK_CLOUD_SETTINGS = Join-Path ([IO.Path]::GetTempPath()) ('NetCheck-LanguageProbe-' + [guid]::NewGuid().ToString('N') + '.dat')
+$env:NETCHECK_GMAIL_SETTINGS = Join-Path ([IO.Path]::GetTempPath()) ('NetCheck-GmailLanguageProbe-' + [guid]::NewGuid().ToString('N') + '.dat')
 $env:NETCHECK_MONITOR_SETTINGS = Join-Path ([IO.Path]::GetTempPath()) ('NetCheck-MonitorLanguageProbe-' + [guid]::NewGuid().ToString('N') + '.json')
 $assembly = [Reflection.Assembly]::LoadFrom($Executable)
 $flags = [Reflection.BindingFlags]'Instance,NonPublic'
@@ -20,6 +21,10 @@ $managerType = $assembly.GetType('NetCheck.CloudBackupManager', $true)
 $manager = [Activator]::CreateInstance($managerType, [object[]]@('TEST-PC', 'A1B2C3D4'))
 $cloudType = $assembly.GetType('NetCheck.CloudBackupForm', $true)
 $cloud = [Activator]::CreateInstance($cloudType, [object[]]@($manager))
+$gmailManagerType = $assembly.GetType('NetCheck.GmailNotificationManager', $true)
+$gmailManager = [Activator]::CreateInstance($gmailManagerType, [object[]]@('TEST-PC', 'A1B2C3D4'))
+$gmailType = $assembly.GetType('NetCheck.GmailNotificationForm', $true)
+$gmail = [Activator]::CreateInstance($gmailType, [object[]]@($gmailManager))
 $settingsType = $assembly.GetType('NetCheck.MonitorSettingsForm', $true)
 $settingsValue = $mainType.GetField('monitorSettings', $flags).GetValue($main)
 $settings = [Activator]::CreateInstance($settingsType, [object[]]@($settingsValue))
@@ -31,6 +36,7 @@ try {
     $aboutText = @($about.Controls | ForEach-Object { $_.Text }) -join "`n"
     $reportText = @($report.Controls | ForEach-Object { $_.Text }) -join "`n"
     $cloudText = @($cloud.Controls | ForEach-Object { $_.Text }) -join "`n"
+    $gmailText = @($gmail.Controls | ForEach-Object { $_.Text }) -join "`n"
     $settingsText = @($settings.Controls | ForEach-Object { $_.Text }) -join "`n"
     $eventNoteText = @($eventNote.Controls | ForEach-Object { $_.Text }) -join "`n"
     $archiveType = $assembly.GetType('NetCheck.ArchiveReport', $true)
@@ -56,23 +62,27 @@ try {
     $reportHtml = $buildHtml.Invoke($null, [object[]]@($sessions, [DateTime]::Today, [DateTime]::Today.AddDays(1), $true))
     $englishReport = $reportHtml.Contains("<html lang='en'>") -and $reportHtml.Contains('Daily Outage Statistics') -and $reportHtml.Contains('Outage Events') -and $reportHtml.Contains('Current Network Adapter') -and $reportHtml.Contains('Wi-Fi Signal') -and $reportHtml.Contains('Complete Daily Test Records') -and $reportHtml.Contains('Full Test Details') -and -not $reportHtml.Contains('每日斷線統計')
     $ok = $main.Text -eq 'NetCheckMonitor Network Monitor' -and
-        $mainText.Contains('Start') -and $mainText.Contains('Download PDF Report') -and $mainText.Contains('About') -and $mainText.Contains('Settings') -and $mainText.Contains('v0.9.8') -and
-        $about.Text -eq 'About NetCheckMonitor' -and $aboutText.Contains('Version 0.9.8') -and $aboutText.Contains('Scheduled monitoring') -and $aboutText.Contains('廖阿輝') -and $aboutText.Contains('Website:') -and $aboutText.Contains('https://ahui3c.com') -and $aboutText.Contains('GitHub project:') -and $aboutText.Contains('https://github.com/ahui3c/NetCheckMonitor') -and $aboutText.Contains('Check for Updates') -and
+        $mainText.Contains('Start') -and $mainText.Contains('Download PDF Report') -and $mainText.Contains('About') -and $mainText.Contains('Settings') -and $mainText.Contains('v0.9.9') -and
+        $about.Text -eq 'About NetCheckMonitor' -and $aboutText.Contains('Version 0.9.9') -and $aboutText.Contains('Scheduled monitoring') -and $aboutText.Contains('廖阿輝') -and $aboutText.Contains('Website:') -and $aboutText.Contains('https://ahui3c.com') -and $aboutText.Contains('GitHub project:') -and $aboutText.Contains('https://github.com/ahui3c/NetCheckMonitor') -and $aboutText.Contains('Check for Updates') -and
         $report.Text -eq 'Download NetCheckMonitor PDF Report' -and $reportText.Contains('All Saved Data') -and
         $cloud.Text -eq 'Google Drive Daily Backup' -and $cloudText.Contains('Sign in to Google Drive') -and
-        $settings.Text -eq 'Monitoring Target Settings' -and $settingsText.Contains('Use built-in test targets (recommended)') -and $settingsText.Contains('The app automatically uses its default connectivity targets.') -and $settingsText.Contains('Use custom test targets') -and $settingsText.Contains('Target 3') -and $settingsText.Contains('Run advanced layered diagnostics after an HTTPS failure (optional)') -and $settingsText.Contains('Prevent the computer from sleeping while monitoring (recommended)') -and $settingsText.Contains('Block Windows shutdown or restart while monitoring (stop monitoring first)') -and $settingsText.Contains('Start the app after Windows sign-in') -and $settingsText.Contains('Start monitoring automatically when the app opens') -and $settingsText.Contains('Interface language') -and $settingsText.Contains('Applied the next time the app starts') -and $settingsText.Contains('Export All Data Backup ZIP') -and $settingsText.Contains('Rebuild Daily Detail Reports') -and
+        $gmail.Text -eq 'Gmail Reports and Recovery Notifications' -and $gmailText.Contains('Sender and recipient are always the same signed-in Google account') -and $gmailText.Contains('Email the PDF and CSV report daily') -and $gmailText.Contains('Send a notification after the internet connection recovers') -and $gmailText.Contains('Send Test Email') -and
+        $settings.Text -eq 'Monitoring Target Settings' -and $settingsText.Contains('Use built-in test targets (recommended)') -and $settingsText.Contains('The app automatically uses its default connectivity targets.') -and $settingsText.Contains('Use custom test targets') -and $settingsText.Contains('Target 3') -and $settingsText.Contains('Run advanced layered diagnostics after an HTTPS failure (optional)') -and $settingsText.Contains('Prevent the computer from sleeping while monitoring (recommended)') -and $settingsText.Contains('Block Windows shutdown or restart while monitoring (use the in-app exit button)') -and $settingsText.Contains('Start the app after Windows sign-in') -and $settingsText.Contains('Start monitoring automatically when the app opens') -and $settingsText.Contains('Interface language') -and $settingsText.Contains('Applied the next time the app starts') -and $settingsText.Contains('Export All Data Backup ZIP') -and $settingsText.Contains('Rebuild Daily Detail Reports') -and
         $eventNote.Text -eq 'Add Event Note' -and $eventNoteText.Contains('Restarted modem') -and $eventNoteText.Contains('Restarted wireless router') -and $eventNoteText.Contains('Restarted computer') -and $eventNoteText.Contains('Rain') -and $eventNoteText.Contains('Thunder') -and $englishReport
     if (-not $ok) { throw 'English UI probe failed.' }
     Write-Output 'English UI probe passed.'
 }
 finally {
     $cloud.Dispose()
+    $gmail.Dispose()
     $settings.Dispose()
     $eventNote.Dispose()
     $manager.Dispose()
+    $gmailManager.Dispose()
     $report.Dispose()
     $about.Dispose()
     $main.Dispose()
     Remove-Item -LiteralPath $env:NETCHECK_CLOUD_SETTINGS -Force -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath $env:NETCHECK_GMAIL_SETTINGS -Force -ErrorAction SilentlyContinue
     Remove-Item -LiteralPath $env:NETCHECK_MONITOR_SETTINGS -Force -ErrorAction SilentlyContinue
 }
