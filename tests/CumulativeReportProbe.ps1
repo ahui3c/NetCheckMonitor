@@ -87,14 +87,31 @@ try {
     Remove-Item -LiteralPath $backupZip -Force
     Remove-Item -LiteralPath $backupExtract -Recurse -Force
 
+    $staleRoot = Join-Path $testRoot 'DuplicateStale'
+    $freshRoot = Join-Path $testRoot 'DuplicateFresh'
+    New-Item -ItemType Directory -Path $staleRoot, $freshRoot | Out-Null
+    $duplicateName = 'NetCheck_DUPLICATE-1234ABCD_20260704_100000.csv'
+    Write-Session (Join-Path $staleRoot $duplicateName) 'STALE-DUPLICATE' '1234ABCD' ([DateTime]'2026-07-04T10:00:00') $true
+    $freshDuplicatePath = Join-Path $freshRoot $duplicateName
+    Write-Session $freshDuplicatePath 'FRESH-DUPLICATE' '1234ABCD' ([DateTime]'2026-07-08T10:00:00') $true
+    Add-Content -LiteralPath $freshDuplicatePath -Encoding UTF8 -Value '"2026-07-09T10:00:00+08:00",MARKER,SESSION_RESUMED,,,"Resumed after a previous stop"'
+    Add-Content -LiteralPath $freshDuplicatePath -Encoding UTF8 -Value '"2026-07-09T10:01:00+08:00",CHECK,ONLINE,10,"https://example.com/","Current data after resume"'
+    (Get-Item -LiteralPath $freshDuplicatePath).LastWriteTime = [DateTime]'2026-07-09T10:02:00'
+    $env:NETCHECK_DATA_ROOTS = $staleRoot + ';' + $freshRoot
+    $loadSessions = $archiveType.GetMethod('LoadSessions', [Reflection.BindingFlags]'Static,NonPublic')
+    $duplicateSessions = @($loadSessions.Invoke($null, @()))
+    $newestDuplicateWins = $duplicateSessions.Count -eq 1 -and $duplicateSessions[0].MachineName -eq 'FRESH-DUPLICATE' -and $duplicateSessions[0].Records.Count -eq 4 -and $duplicateSessions[0].Records[3].Time.Date -eq ([DateTime]'2026-07-09').Date
+    $resumedAfterStopExtendsRange = -not $duplicateSessions[0].Stopped -and $duplicateSessions[0].End.Date -eq ([DateTime]'2026-07-09').Date
+    $env:NETCHECK_DATA_ROOTS = $testRoot
+
     $clearArgs = [object[]]@(0)
     $failures = $clearData.Invoke($null, $clearArgs)
     $cleared = $failures.Count -eq 0 -and [int]$clearArgs[0] -ge 4 -and @(Get-ChildItem -LiteralPath $testRoot -File).Count -eq 0
     $writeReport.Invoke($null, $writeArgs) | Out-Null
     $emptyAfterClear = [IO.File]::ReadAllText($report).Contains('目前沒有有效的監控檢查資料')
 
-    if (-not ($firstGeneration -and $historyCombined -and $gapsExcluded -and $readableScreenText -and $newestTimelineFirst -and $timelineRunsRightToLeft -and $twoLineTimelineLayout -and $combinedEventTable -and $timelineNoteAndHover -and $outagesBeforeDiagnostics -and $dateColorGrouping -and $summaryUsesDailyLinks -and $detailReportComplete -and $detailNewestFirst -and $cachePreserved -and $forceRebuilt -and $backupExported -and $cleared -and $emptyAfterClear)) { throw 'Cumulative report probe failed.' }
-    Write-Output 'Cumulative links, daily cache/rebuild, ZIP backup export, gap exclusion, and clear-data reset passed.'
+    if (-not ($firstGeneration -and $historyCombined -and $gapsExcluded -and $readableScreenText -and $newestTimelineFirst -and $timelineRunsRightToLeft -and $twoLineTimelineLayout -and $combinedEventTable -and $timelineNoteAndHover -and $outagesBeforeDiagnostics -and $dateColorGrouping -and $summaryUsesDailyLinks -and $detailReportComplete -and $detailNewestFirst -and $cachePreserved -and $forceRebuilt -and $backupExported -and $newestDuplicateWins -and $resumedAfterStopExtendsRange -and $cleared -and $emptyAfterClear)) { throw 'Cumulative report probe failed.' }
+    Write-Output 'Cumulative links, duplicate freshness, resumed-session range, daily cache/rebuild, ZIP backup export, gap exclusion, and clear-data reset passed.'
 }
 finally {
     $resolvedRoot = [IO.Path]::GetFullPath($testRoot)

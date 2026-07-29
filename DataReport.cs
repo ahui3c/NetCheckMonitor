@@ -378,7 +378,7 @@ namespace NetCheck
                     ZipArchiveEntry manifestEntry = archive.CreateEntry("Backup_Manifest.txt", CompressionLevel.Optimal);
                     using (var writer = new StreamWriter(manifestEntry.Open(), new UTF8Encoding(true)))
                     {
-                        writer.WriteLine("NetCheckMonitor 0.9.8");
+                        writer.WriteLine("NetCheckMonitor 0.9.9");
                         writer.WriteLine("Exported: " + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss zzz"));
                         writer.WriteLine("Computer: " + Environment.MachineName);
                         writer.WriteLine("Files: " + count);
@@ -508,10 +508,14 @@ namespace NetCheck
                         if (status == "COMPUTER") ParseComputer(detail, session);
                         else if (status == "NETWORK") ParseNetwork(detail, session);
                         else if (status == "EVENT_NOTE") session.EventNotes.Add(new EventNote { Time = time, Text = detail });
-                        else if (status == "STARTED") session.Start = time;
+                        else if (status == "STARTED") { if (session.Start == DateTime.MaxValue || time < session.Start) session.Start = time; session.Stopped = false; }
                         else if (status == "STOPPED") { session.End = time; session.Stopped = true; }
                         else if (status == "PAUSED" || status == "INTERRUPTED") { pauseOpen = true; pauseStart = time; }
-                        else if ((status == "RESUMED" || status == "SESSION_RESUMED") && pauseOpen) { session.Pauses.Add(new Period { Start = pauseStart, End = time }); pauseOpen = false; }
+                        else if (status == "RESUMED" || status == "SESSION_RESUMED")
+                        {
+                            if (pauseOpen) { session.Pauses.Add(new Period { Start = pauseStart, End = time }); pauseOpen = false; }
+                            if (status == "SESSION_RESUMED" && time > session.End) session.Stopped = false;
+                        }
                     }
                     else if (type == "CHECK")
                     {
@@ -519,6 +523,7 @@ namespace NetCheck
                         Int64.TryParse(f[3], out latency);
                         session.Records.Add(new Record { Time = time, Online = status == "ONLINE", Status = status, Latency = latency, Target = f[4], Detail = detail });
                         if (session.Start == DateTime.MaxValue) session.Start = time;
+                        if (time > session.End) session.Stopped = false;
                     }
                 }
             }
@@ -834,13 +839,64 @@ namespace NetCheck
 
         private static List<string> GetCsvFiles()
         {
-            var found = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            var found = new Dictionary<string, CsvCandidate>(StringComparer.OrdinalIgnoreCase);
             foreach (string dir in StorageDirectories())
             {
                 if (!Directory.Exists(dir)) continue;
-                foreach (string file in Directory.GetFiles(dir, "NetCheck_*.csv")) if (!found.ContainsKey(Path.GetFileName(file))) found[Path.GetFileName(file)] = file;
+                foreach (string file in Directory.GetFiles(dir, "NetCheck_*.csv"))
+                {
+                    string name = Path.GetFileName(file);
+                    CsvCandidate candidate = InspectCsvCandidate(file);
+                    CsvCandidate existing;
+                    if (!found.TryGetValue(name, out existing) || IsPreferredCsv(candidate, existing)) found[name] = candidate;
+                }
             }
-            return new List<string>(found.Values);
+            var result = new List<string>();
+            foreach (CsvCandidate candidate in found.Values) result.Add(candidate.Path);
+            return result;
+        }
+
+        private sealed class CsvCandidate
+        {
+            public string Path;
+            public DateTime LatestRecordUtc;
+            public long Length;
+            public DateTime LastWriteUtc;
+        }
+
+        private static CsvCandidate InspectCsvCandidate(string path)
+        {
+            var candidate = new CsvCandidate { Path = path, LatestRecordUtc = DateTime.MinValue, LastWriteUtc = DateTime.MinValue };
+            try
+            {
+                var info = new FileInfo(path);
+                candidate.Length = info.Length;
+                candidate.LastWriteUtc = info.LastWriteTimeUtc;
+                using (var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
+                using (var reader = new StreamReader(stream, Encoding.UTF8, true))
+                {
+                    string line;
+                    while ((line = reader.ReadLine()) != null)
+                    {
+                        List<string> fields = ParseCsv(line);
+                        DateTime timestamp;
+                        if (fields.Count > 0 && DateTime.TryParse(fields[0], CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out timestamp))
+                        {
+                            DateTime utc = timestamp.ToUniversalTime();
+                            if (utc > candidate.LatestRecordUtc) candidate.LatestRecordUtc = utc;
+                        }
+                    }
+                }
+            }
+            catch { }
+            return candidate;
+        }
+
+        private static bool IsPreferredCsv(CsvCandidate candidate, CsvCandidate existing)
+        {
+            if (candidate.LatestRecordUtc != existing.LatestRecordUtc) return candidate.LatestRecordUtc > existing.LatestRecordUtc;
+            if (candidate.Length != existing.Length) return candidate.Length > existing.Length;
+            return candidate.LastWriteUtc > existing.LastWriteUtc;
         }
 
         private static List<string> GetManagedFiles()
@@ -870,6 +926,16 @@ namespace NetCheck
             string exe = Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location);
             var result = new List<string>();
             AddUnique(result, Path.Combine(exe, "NetCheck_Data"));
+            try
+            {
+                ActiveSessionState active = SessionStateStore.Load();
+                if (active != null && !String.IsNullOrWhiteSpace(active.CsvPath))
+                {
+                    string activeDirectory = Path.GetDirectoryName(active.CsvPath);
+                    if (!String.IsNullOrWhiteSpace(activeDirectory)) AddUnique(result, activeDirectory);
+                }
+            }
+            catch { }
             AddUnique(result, Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "NetCheck_Data"));
             AddUnique(result, Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "NetCheck", "Data"));
             string recovery = Environment.GetEnvironmentVariable("NETCHECK_BACKUP_DIR");

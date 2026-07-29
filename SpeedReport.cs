@@ -151,7 +151,18 @@ namespace NetCheck
         private static List<string> DataDirectories()
         {
             var r = new List<string>(); string env = Environment.GetEnvironmentVariable("NETCHECK_DATA_ROOTS"); if (!String.IsNullOrWhiteSpace(env)) r.AddRange(env.Split(new char[] { ';' }, StringSplitOptions.RemoveEmptyEntries));
-            r.Add(SpeedTestStorage.DataDirectory()); r.Add(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "NetCheck_Data")); r.Add(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "NetCheck", "Data")); r.Add(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "NetCheck", "Recovery"));
+            r.Add(SpeedTestStorage.DataDirectory());
+            try
+            {
+                ActiveSessionState active = SessionStateStore.Load();
+                if (active != null && !String.IsNullOrWhiteSpace(active.CsvPath))
+                {
+                    string activeDirectory = Path.GetDirectoryName(active.CsvPath);
+                    if (!String.IsNullOrWhiteSpace(activeDirectory)) r.Add(activeDirectory);
+                }
+            }
+            catch { }
+            r.Add(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "NetCheck_Data")); r.Add(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "NetCheck", "Data")); r.Add(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "NetCheck", "Recovery"));
             var unique = new List<string>(); foreach (string p in r) if (!String.IsNullOrWhiteSpace(p) && !unique.Exists(delegate (string x) { return String.Equals(Path.GetFullPath(x), Path.GetFullPath(p), StringComparison.OrdinalIgnoreCase); })) unique.Add(p); return unique;
         }
     }

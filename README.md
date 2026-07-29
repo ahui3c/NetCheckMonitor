@@ -6,14 +6,14 @@
 
 NetCheckMonitor（中文名稱：對外網路連線能力監控程式）是免費、開源、無廣告的 Windows 工具。它會定時檢查電腦是否能連上外部網路，長時間記錄斷線狀況，並產生圖形化 HTML 與 PDF 報表，適合家用網路障礙報修與連線品質佐證。
 
-目前版本：**0.9.8**
+目前版本：**0.9.9**
 
-## 0.9.8 更新簡述
+## 0.9.9 更新簡述
 
-- 增加可選用的 Cloudflare 定時測速參考功能（Beta），提供測速等級、流量保護及獨立速度趨勢報表。
-- 簡化主畫面：開始監控後按鈕會停用，避免誤觸中止；統一查看報表，並將事件註記、Google Drive 備份與資料清除移至更合適的位置。
+- 增加 Gmail 每日 PDF／CSV 報表、斷線恢復通知及測試郵件，並限制只能寄給登入的同一個 Google 帳戶。
+- 修正累積報表與測速趨勢報表在資料目錄搬移或工作階段恢復後可能遺漏較新資料的問題。
 
-完整內容請參閱 [0.9.8 更新說明](docs/RELEASE_NOTES_0.9.8.md)。
+完整內容請參閱 [0.9.9 更新說明](docs/RELEASE_NOTES_0.9.9.md)。
 
 ## 下載
 
@@ -44,6 +44,7 @@ NetCheckMonitor（中文名稱：對外網路連線能力監控程式）是免�
 - 設定可分別選擇「登入 Windows 後自動啟動程式」與「程式啟動後自動開始監控」；若有未完成工作階段，會優先詢問是否接續。
 - 啟動時會檢查 NetCheckMonitor 是否已在執行；重複開啟不會建立第二份監控，而會顯示既有視窗。
 - Google Drive 每日定時備份完整 PDF 與原始 CSV 至 `Net_Check` 資料夾。
+- 可選擇登入自己的 Gmail，每日把 PDF 與 CSV 報表寄給該登入帳戶，並在確認斷線後恢復連線時寄送通知；另提供測試郵件。寄件者與收件者固定為同一登入帳戶，不能寄給其他地址。
 - 設定可選擇監控期間防止 Windows 進入休眠，並可另外選擇阻止關機或重新啟動；關機保護啟用時需先按右下角「關閉程式並停止監控」。強制更新、斷電或硬體重置仍可能使程式中斷。
 - 按右上角 X 時縮到系統匣，首次操作會提醒應使用右下角「關閉程式並停止監控」安全結束，提醒只顯示一次。
 - 主畫面的安全關閉功能會先保存資料並建立最終報表。
@@ -75,7 +76,18 @@ NetCheckMonitor（中文名稱：對外網路連線能力監控程式）是免�
 2. 按「登入 Google Drive」，使用自己的 Google 帳號完成瀏覽器授權。
 3. 設定每日備份時間。
 
-使用者不需要建立 Google Cloud 專案或下載憑證。程式使用 Desktop OAuth client ID 與 PKCE；Google 要求的已安裝應用程式憑證只在正式建置時注入，不會提交到公開原始碼。程式只要求 `drive.file` 權限，登入權杖由 Windows DPAPI 加密保存在目前 Windows 帳號中。
+使用者不需要建立 Google Cloud 專案或下載憑證。程式使用 Desktop OAuth client ID 與 PKCE；Google 要求的已安裝應用程式憑證只在正式建置時注入，不會提交到公開原始碼。Drive 功能只要求 `drive.file` 權限，登入權杖由 Windows DPAPI 加密保存在目前 Windows 帳號中。
+
+## Gmail 每日報表與恢復通知
+
+1. 開啟「設定」→「Gmail 報表與通知設定」。
+2. 按「登入 Gmail」，登入自己的 Google 帳戶並同意 `gmail.send` 寄信權限。
+3. 選擇每日 PDF／CSV 報表、恢復通知與每日寄送時間，再按「儲存寄送設定」。
+4. 可按「寄送測試郵件」確認設定。郵件只能寄給登入的同一帳戶，介面不提供其他收件地址。
+
+完全斷網時無法立即使用 Gmail；恢復通知會先以 DPAPI 加密保存在本機，確認恢復連線後寄出，暫時失敗時會依退避時間自動重試。Gmail 登入與 Google Drive 登入是獨立授權，啟用 Gmail 不會取得讀取信箱的權限。
+
+自行製作公開發行版時，OAuth client 所屬的 Google Cloud 專案還必須啟用 Gmail API，並為敏感權限 `gmail.send` 完成 OAuth 驗證；開發／測試期間可先將測試帳戶加入 OAuth audience。
 
 ## 資料與隱私
 
@@ -83,7 +95,7 @@ NetCheckMonitor（中文名稱：對外網路連線能力監控程式）是免�
 - 8 碼識別碼優先由 Windows MachineGuid 單向雜湊產生；原始 MachineGuid、MAC 位址與硬體序號不會寫入檔案。
 - 主要資料存放在程式旁的 `NetCheck_Data`；無法寫入時改存「文件」資料夾。
 - 復原副本存放在 `%LOCALAPPDATA%\NetCheck\Recovery`。
-- 個人 CSV、HTML、PDF、Google refresh token 與設定檔不應提交到公開儲存庫。
+- 個人 CSV、HTML、PDF、Google refresh token、待寄通知與設定檔不應提交到公開儲存庫。
 
 ## 從原始碼建置
 

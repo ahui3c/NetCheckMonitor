@@ -18,8 +18,8 @@ using Microsoft.Win32;
 [assembly: AssemblyProduct("NetCheckMonitor")]
 [assembly: AssemblyDescription("Internet connection monitoring and outage reporting")]
 [assembly: AssemblyCompany("廖阿輝")]
-[assembly: AssemblyVersion("0.9.8.0")]
-[assembly: AssemblyFileVersion("0.9.8.0")]
+[assembly: AssemblyVersion("0.9.9.0")]
+[assembly: AssemblyFileVersion("0.9.9.0")]
 
 namespace NetCheck
 {
@@ -139,6 +139,7 @@ namespace NetCheck
         private DateTime lastStateHeartbeat;
         private DateTime processStartedUtc = Process.GetCurrentProcess().StartTime.ToUniversalTime();
         private CloudBackupManager cloudManager;
+        private GmailNotificationManager gmailManager;
         private MonitorTargetSettings monitorSettings;
         private NetworkSnapshot currentNetwork;
         private AdvancedDiagnosticResult lastAdvancedDiagnostic;
@@ -287,6 +288,7 @@ namespace NetCheck
             if (String.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("NETCHECK_MONITOR_SETTINGS")))
                 try { AutoStartManager.SetEnabled(monitorSettings.AutoStartWindows); } catch { }
             cloudManager = new CloudBackupManager(machineName, machineId);
+            gmailManager = new GmailNotificationManager(machineName, machineId);
         }
 
         private void StartMonitoring()
@@ -513,9 +515,14 @@ namespace NetCheck
             using (var form = new CloudBackupForm(cloudManager)) form.ShowDialog(this);
         }
 
+        private void ShowGmailSettings()
+        {
+            using (var form = new GmailNotificationForm(gmailManager)) form.ShowDialog(this);
+        }
+
         private void ShowMonitorSettings()
         {
-            using (var form = new MonitorSettingsForm(monitorSettings, ForceRebuildDailyDetailReports, OpenSpeedTrendReport, ShowCloudSettings, ClearStoredData))
+            using (var form = new MonitorSettingsForm(monitorSettings, ForceRebuildDailyDetailReports, OpenSpeedTrendReport, ShowCloudSettings, ShowGmailSettings, ClearStoredData))
             {
                 if (form.ShowDialog(this) != DialogResult.OK) return;
                 try
@@ -670,7 +677,7 @@ namespace NetCheck
                                 request.Method = "GET";
                                 request.Timeout = 5000;
                                 request.ReadWriteTimeout = 5000;
-                                request.UserAgent = "NetCheckMonitor/0.9.8";
+                                request.UserAgent = "NetCheckMonitor/0.9.9";
                                 request.AllowAutoRedirect = true;
                                 using (var response = (HttpWebResponse)request.GetResponse())
                                 {
@@ -703,7 +710,8 @@ namespace NetCheck
                     int retries = consecutiveFailures;
                     bool recovered = outageConfirmed;
                     dismissedSuspected = retries > 0 && !outageConfirmed;
-                    record = new CheckRecord { Time = at, Online = true, LatencyMs = latency, Target = target, Detail = detail, Status = "ONLINE", JustRecovered = recovered, RetryNumber = retries, Network = network };
+                    DateTime recoveredOutageStart = suspectedStart;
+                    record = new CheckRecord { Time = at, Online = true, LatencyMs = latency, Target = target, Detail = detail, Status = "ONLINE", JustRecovered = recovered, RetryNumber = retries, OutageStart = recoveredOutageStart, Network = network };
                     ResetOutageTracking();
                 }
                 else
@@ -740,6 +748,7 @@ namespace NetCheck
                 if (record.JustRecovered) WriteMarker("OUTAGE_RECOVERED", L.T("確認網路已恢復；快速追蹤失敗次數：", "Internet recovery confirmed; fast-tracking failures: ") + record.RetryNumber);
                 if (dismissedSuspected) WriteMarker("OUTAGE_DISMISSED", L.T("快速複查成功，未形成確認斷線", "Fast retry succeeded; suspected outage dismissed"));
                 PersistSessionState();
+                if (record.JustRecovered && gmailManager != null) gmailManager.QueueRecoveryNotification(record.OutageStart, record.Time, record.RetryNumber);
                 if (!IsDisposed && IsHandleCreated) BeginInvoke((MethodInvoker)delegate { RenderCheck(record); });
             }
             finally
@@ -1710,9 +1719,17 @@ namespace NetCheck
                 MessageBox.Show(L.T("Google Drive 雲端備份仍在進行，請等待備份完成後再關閉程式。", "A Google Drive backup is still in progress. Wait for it to finish before closing the program."), "NetCheckMonitor", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
+            if (e.CloseReason == CloseReason.UserClosing && gmailManager != null && gmailManager.SendInProgress)
+            {
+                e.Cancel = true;
+                allowExit = false;
+                MessageBox.Show(L.T("Gmail 郵件仍在製作或寄送，請等待完成後再關閉程式。", "A Gmail message is still being prepared or sent. Wait for it to finish before closing the program."), "NetCheckMonitor", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
             if (running && e.CloseReason == CloseReason.WindowsShutDown) PrepareForSystemRestart();
             else if (running) StopMonitoring(false);
             if (cloudManager != null) cloudManager.Dispose();
+            if (gmailManager != null) gmailManager.Dispose();
             ReleaseShutdownBlockReason();
             trayIcon.Visible = false;
             trayIcon.Dispose();
@@ -1725,7 +1742,7 @@ namespace NetCheck
 
     internal sealed class AboutForm : Form
     {
-        internal const string AppVersion = "0.9.8";
+        internal const string AppVersion = "0.9.9";
         internal const string Purpose = "可定時監控對外網路連線，紀錄斷線並產生圖文報表，並支援網路硬碟備份，PDF 下載，程式完全免費開源無廣告。";
         internal const string EnglishPurpose = "Scheduled monitoring of external Internet connectivity, outage logging, graphical reports, cloud-drive backup, and PDF downloads. Completely free, open source, and ad-free.";
         private const string GitHubProjectUrl = "https://github.com/ahui3c/NetCheckMonitor";

@@ -3,9 +3,13 @@ $ErrorActionPreference = 'Stop'
 $testRoot = Join-Path ([IO.Path]::GetTempPath()) ('NetCheck-SpeedTest-' + [guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Force -Path $testRoot | Out-Null
 $oldData = $env:NETCHECK_SPEED_DATA_DIR
+$oldRoots = $env:NETCHECK_DATA_ROOTS
+$oldSession = $env:NETCHECK_SESSION_STATE
 $oldLanguage = $env:NETCHECK_UI_LANGUAGE
 try {
     $env:NETCHECK_SPEED_DATA_DIR = $testRoot
+    $env:NETCHECK_DATA_ROOTS = $null
+    $env:NETCHECK_SESSION_STATE = Join-Path $testRoot 'active-session.json'
     $env:NETCHECK_UI_LANGUAGE = 'en'
     $asm = [Reflection.Assembly]::LoadFrom((Resolve-Path $Executable))
     $flags = [Reflection.BindingFlags]'Static,NonPublic'
@@ -29,6 +33,27 @@ try {
     $csv = Get-ChildItem -LiteralPath $testRoot -Filter 'NetCheck_Speed_*.csv'
     $html = [IO.File]::ReadAllText($htmlPath)
     if (@($csv).Count -ne 1 -or $html -notmatch '321.5 Mbps' -or $html -notmatch '88.2 Mbps' -or $html -match 'Estimated Outage') { throw 'Speed storage/report isolation test failed.' }
+
+    $activeData = Join-Path $testRoot 'PreviousActiveData'
+    New-Item -ItemType Directory -Force -Path $activeData | Out-Null
+    $sessionType = $asm.GetType('NetCheck.ActiveSessionState', $true)
+    $session = [Activator]::CreateInstance($sessionType, $true)
+    $session.Active = $true
+    $session.MachineId = 'A1B2C3D4'
+    $session.CsvPath = Join-Path $activeData 'NetCheck_SPEED-PC-A1B2C3D4_20260720_080000.csv'
+    $sessionStateStore = $asm.GetType('NetCheck.SessionStateStore', $true)
+    $sessionStateStore.GetMethod('Save', [Reflection.BindingFlags]'Static,Public').Invoke($null, @($session))
+    $resultType.GetField('Time', $instanceFields).SetValue($result, [DateTime]'2026-07-24T08:00:00')
+    $env:NETCHECK_SPEED_DATA_DIR = $activeData
+    $storage.GetMethod('Append', $flags).Invoke($null, @('SPEED-PC', 'A1B2C3D4', $result))
+    $resultType.GetField('Time', $instanceFields).SetValue($result, [DateTime]'2026-07-29T08:00:00')
+    $env:NETCHECK_SPEED_DATA_DIR = $testRoot
+    $storage.GetMethod('Append', $flags).Invoke($null, @('SPEED-PC', 'A1B2C3D4', $result))
+    $loadedSpeedItems = @($report.GetMethod('Load', $flags).Invoke($null, @('A1B2C3D4')))
+    $speedItemType = $asm.GetType('NetCheck.SpeedTrendReport+Item', $true)
+    $speedTimeField = $speedItemType.GetField('Time', [Reflection.BindingFlags]'Instance,NonPublic')
+    $loadedSpeedDates = @($loadedSpeedItems | ForEach-Object { ([DateTime]$speedTimeField.GetValue($_)).ToString('yyyy-MM-dd') })
+    if ($loadedSpeedItems.Count -ne 3 -or -not $loadedSpeedDates.Contains('2026-07-20') -or -not $loadedSpeedDates.Contains('2026-07-24') -or -not $loadedSpeedDates.Contains('2026-07-29')) { throw 'Speed report did not merge the current and active-session data directories.' }
 
     $settingsType = $asm.GetType('NetCheck.SpeedTestOptions', $true)
     $defaults = $settingsType.GetMethod('Defaults', $flags).Invoke($null, @())
@@ -55,10 +80,12 @@ try {
     $batchFields = [Reflection.BindingFlags]'Instance,NonPublic'
     $standardDown = $profileArgs[1]; $standardUp = $profileArgs[2]
     if ($standardDown.Count -ne 2 -or $standardUp.Count -ne 2 -or $standardDown[1].GetType().GetField('Count', $batchFields).GetValue($standardDown[1]) -ne 8 -or $standardUp[1].GetType().GetField('Count', $batchFields).GetValue($standardUp[1]) -ne 8) { throw 'Standard multi-stream profile is incorrect.' }
-    Write-Host 'Speed-test storage, report/settings, persistent cooldown, 24-hour defaults, and eight-stream profile passed.'
+    Write-Host 'Speed-test storage, split-directory report merge, settings, persistent cooldown, 24-hour defaults, and eight-stream profile passed.'
 }
 finally {
     $env:NETCHECK_SPEED_DATA_DIR = $oldData
+    $env:NETCHECK_DATA_ROOTS = $oldRoots
+    $env:NETCHECK_SESSION_STATE = $oldSession
     $env:NETCHECK_UI_LANGUAGE = $oldLanguage
     Remove-Item -LiteralPath $testRoot -Recurse -Force -ErrorAction SilentlyContinue
 }

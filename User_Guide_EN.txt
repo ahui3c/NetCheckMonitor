@@ -1,7 +1,7 @@
 NetCheckMonitor Network Connection Monitor (Portable Windows Edition)
 ===================================================================
 
-Version 0.9.8
+Version 0.9.9
 
 Interface language
 - On first launch, choose Traditional Chinese or English. The choice is saved and the prompt is not shown again.
@@ -67,6 +67,16 @@ Google Drive backup
 - The app requests only drive.file access.
 - Windows DPAPI encrypts the refresh token for the current Windows account.
 - The program must remain running for an on-time backup.
+
+Gmail daily reports and recovery notifications
+1. Open Settings > Gmail Report & Notification Settings.
+2. Select Sign in to Gmail, sign in with your own Google account, and grant send permission.
+3. Choose daily PDF/CSV reports, recovery notifications, and the daily delivery time, then save.
+4. Select Send Test Email to verify delivery.
+- Sender and recipient are fixed to the same signed-in account; no other recipient can be entered.
+- The app requests send permission only and cannot read the Gmail mailbox.
+- During a complete outage the recovery notice is encrypted locally, then sent after connectivity returns with automatic retry after temporary failures.
+- Gmail and Google Drive use separate grants.
 
 Data protection
 - Every result is immediately force-flushed to disk.

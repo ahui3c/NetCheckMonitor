@@ -241,32 +241,38 @@ namespace NetCheck
         private readonly Button rebuildDailyReportsButton = new Button();
         private readonly Button speedSettingsButton = new Button();
         private readonly Button cloudSettingsButton = new Button();
+        private readonly Button gmailSettingsButton = new Button();
         private readonly Button clearDataButton = new Button();
         private readonly Button saveButton = new Button();
         private readonly Button cancelButton = new Button();
         private readonly Action rebuildDailyReports;
         private readonly Action openSpeedReport;
         private readonly Action showCloudSettings;
+        private readonly Action showGmailSettings;
         private readonly Action clearStoredData;
         private SpeedTestOptions speedOptions;
         public MonitorTargetSettings Result { get; private set; }
         public string SelectedLanguage { get; private set; }
 
-        public MonitorSettingsForm(MonitorTargetSettings current) : this(current, null, null, null, null) { }
+        public MonitorSettingsForm(MonitorTargetSettings current) : this(current, null, null, null, null, null) { }
 
-        public MonitorSettingsForm(MonitorTargetSettings current, Action rebuildDailyReportsAction) : this(current, rebuildDailyReportsAction, null, null, null) { }
+        public MonitorSettingsForm(MonitorTargetSettings current, Action rebuildDailyReportsAction) : this(current, rebuildDailyReportsAction, null, null, null, null) { }
 
-        public MonitorSettingsForm(MonitorTargetSettings current, Action rebuildDailyReportsAction, Action openSpeedReportAction) : this(current, rebuildDailyReportsAction, openSpeedReportAction, null, null) { }
+        public MonitorSettingsForm(MonitorTargetSettings current, Action rebuildDailyReportsAction, Action openSpeedReportAction) : this(current, rebuildDailyReportsAction, openSpeedReportAction, null, null, null) { }
 
         public MonitorSettingsForm(MonitorTargetSettings current, Action rebuildDailyReportsAction, Action openSpeedReportAction, Action showCloudSettingsAction, Action clearStoredDataAction)
+            : this(current, rebuildDailyReportsAction, openSpeedReportAction, showCloudSettingsAction, null, clearStoredDataAction) { }
+
+        public MonitorSettingsForm(MonitorTargetSettings current, Action rebuildDailyReportsAction, Action openSpeedReportAction, Action showCloudSettingsAction, Action showGmailSettingsAction, Action clearStoredDataAction)
         {
             rebuildDailyReports = rebuildDailyReportsAction;
             openSpeedReport = openSpeedReportAction;
             showCloudSettings = showCloudSettingsAction;
+            showGmailSettings = showGmailSettingsAction;
             clearStoredData = clearStoredDataAction;
             Text = L.T("監控目標設定", "Monitoring Target Settings");
             Font = new Font("Microsoft JhengHei UI", 10F);
-            ClientSize = new Size(620, 760);
+            ClientSize = new Size(620, 780);
             FormBorderStyle = FormBorderStyle.FixedDialog;
             MaximizeBox = false;
             MinimizeBox = false;
@@ -318,23 +324,27 @@ namespace NetCheck
             cloudSettingsButton.SetBounds(51, 612, 260, 34);
             cloudSettingsButton.Enabled = showCloudSettings != null;
             cloudSettingsButton.Click += delegate { if (showCloudSettings != null) showCloudSettings(); };
+            gmailSettingsButton.Text = L.T("Gmail 報表與通知設定…", "Gmail Report & Notification Settings…");
+            gmailSettingsButton.SetBounds(325, 612, 260, 34);
+            gmailSettingsButton.Enabled = showGmailSettings != null;
+            gmailSettingsButton.Click += delegate { if (showGmailSettings != null) showGmailSettings(); };
             clearDataButton.Text = L.T("清除全部儲存資料…", "Clear All Saved Data…");
-            clearDataButton.SetBounds(325, 612, 260, 34);
+            clearDataButton.SetBounds(51, 654, 260, 34);
             clearDataButton.ForeColor = Color.Firebrick;
             clearDataButton.Enabled = clearStoredData != null;
             clearDataButton.Click += delegate { if (clearStoredData != null) clearStoredData(); };
 
-            exportBackupButton.SetBounds(51, 654, 260, 34);
+            exportBackupButton.SetBounds(325, 654, 260, 34);
             exportBackupButton.Click += delegate { ExportBackupZip(); };
             rebuildDailyReportsButton.Text = L.T("強制重製每日詳細報表", "Rebuild Daily Detail Reports");
-            rebuildDailyReportsButton.SetBounds(325, 654, 260, 34);
+            rebuildDailyReportsButton.SetBounds(51, 696, 534, 34);
             rebuildDailyReportsButton.Enabled = rebuildDailyReports != null;
             rebuildDailyReportsButton.Click += delegate { RebuildDailyReports(); };
 
             saveButton.Text = L.T("儲存", "Save");
             cancelButton.Text = L.T("取消", "Cancel");
-            saveButton.SetBounds(352, 712, 110, 30);
-            cancelButton.SetBounds(475, 712, 110, 30);
+            saveButton.SetBounds(352, 736, 110, 30);
+            cancelButton.SetBounds(475, 736, 110, 30);
             cancelButton.DialogResult = DialogResult.Cancel;
             saveButton.Click += delegate { ValidateAndClose(); };
             builtInRadio.CheckedChanged += delegate { UpdateTargetState(); };
@@ -354,7 +364,7 @@ namespace NetCheck
             if (current.CustomTargets != null)
                 for (int i = 0; i < current.CustomTargets.Count && i < targetBoxes.Length; i++) targetBoxes[i].Text = current.CustomTargets[i];
             UpdateTargetState();
-            Controls.AddRange(new Control[] { title, intro, builtInRadio, builtInInfo, customRadio, hint, advancedDiagnosticsBox, preventSleepBox, preventShutdownBox, autoStartWindowsBox, autoStartMonitoringBox, languageLabel, languageBox, languageHint, speedSettingsButton, cloudSettingsButton, clearDataButton, exportBackupButton, rebuildDailyReportsButton, saveButton, cancelButton });
+            Controls.AddRange(new Control[] { title, intro, builtInRadio, builtInInfo, customRadio, hint, advancedDiagnosticsBox, preventSleepBox, preventShutdownBox, autoStartWindowsBox, autoStartMonitoringBox, languageLabel, languageBox, languageHint, speedSettingsButton, cloudSettingsButton, gmailSettingsButton, clearDataButton, exportBackupButton, rebuildDailyReportsButton, saveButton, cancelButton });
         }
 
         private void EditSpeedSettings()
