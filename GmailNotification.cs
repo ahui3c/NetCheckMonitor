@@ -351,9 +351,16 @@ namespace NetCheck
             string email = AccountEmail;
             if (!IsSafeEmail(email)) throw new InvalidOperationException(L.T("登入信箱格式無效，請重新連接 Gmail。", "The signed-in email address is invalid. Reconnect Gmail."));
             byte[] mime = BuildSelfMime(email, subject, body, attachmentPaths);
+            ApiRequest("POST", "https://gmail.googleapis.com/gmail/v1/users/me/messages/send", GetAccessToken(), "application/json; charset=UTF-8", BuildSendPayload(mime));
+        }
+
+        private static byte[] BuildSendPayload(byte[] mime)
+        {
             var payload = new Dictionary<string, object>();
-            payload["raw"] = Base64Url(mime);
-            ApiRequest("POST", "https://gmail.googleapis.com/gmail/v1/users/me/messages/send", GetAccessToken(), "application/json; charset=UTF-8", Utf8(new JavaScriptSerializer().Serialize(payload)));
+            payload["raw"] = Base64Url(mime ?? new byte[0]);
+            var serializer = new JavaScriptSerializer();
+            serializer.MaxJsonLength = Int32.MaxValue;
+            return Utf8(serializer.Serialize(payload));
         }
 
         private string GetAccessToken()
@@ -630,6 +637,18 @@ namespace NetCheck
                 && raw.Contains("To: " + email)
                 && raw.Contains("Subject: =?UTF-8?B?")
                 && raw.IndexOf("other@example.com", StringComparison.OrdinalIgnoreCase) < 0;
+        }
+
+        public static bool RunLargePayloadSelfTest()
+        {
+            byte[] mime = new byte[1600000];
+            for (int i = 0; i < mime.Length; i++) mime[i] = (byte)(i % 251);
+            byte[] json = BuildSendPayload(mime);
+            string text = Encoding.UTF8.GetString(json);
+            return json.Length > 2097152
+                && text.StartsWith("{\"raw\":\"", StringComparison.Ordinal)
+                && text.EndsWith("\"}", StringComparison.Ordinal)
+                && text.IndexOf(Base64Url(new byte[] { 0, 1, 2, 3 }), StringComparison.Ordinal) > 0;
         }
 
         public static bool RunOAuthRequestSelfTest()
