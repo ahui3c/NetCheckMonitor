@@ -6,14 +6,14 @@
 
 NetCheckMonitor is a free, open-source, ad-free Windows utility that periodically checks whether a computer can reach the public Internet. It records outages over hours or days and creates graphical HTML and PDF reports suitable for troubleshooting home Internet service or documenting connection problems for an ISP.
 
-Current version: **0.9.9**
+Current version: **0.9.10**
 
-## What's new in 0.9.9
+## What's new in 0.9.10
 
-- Adds Gmail daily PDF/CSV reports, outage recovery notifications, and test messages, restricted to the same signed-in Google account.
-- Fixes cumulative and speed-trend reports that could miss newer records after a data-directory move or resumed monitoring session.
+- Fixes Gmail delivery failures when a larger daily PDF/CSV report exceeds the default .NET JSON length limit.
+- Adds an automated Gmail payload test above 2 MB to protect large-report packaging and delivery.
 
-See the complete [0.9.9 release notes](docs/RELEASE_NOTES_0.9.9.md).
+See the complete [0.9.10 release notes](docs/RELEASE_NOTES_0.9.10.md).
 
 ## Download
 

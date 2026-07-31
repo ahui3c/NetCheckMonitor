@@ -12,6 +12,7 @@ try {
     [string]$storagePath = Join-Path $testRoot 'storage-selftest.dat'
     $storage = $managerType.GetMethod('RunStorageSelfTest', $publicStatic).Invoke($null, [object[]]@($storagePath))
     $mime = $managerType.GetMethod('RunMimeSelfTest', $publicStatic).Invoke($null, @())
+    $largePayload = $managerType.GetMethod('RunLargePayloadSelfTest', $publicStatic).Invoke($null, @())
     $oauth = $managerType.GetMethod('RunOAuthRequestSelfTest', $publicStatic).Invoke($null, @())
 
     $manager = [Activator]::CreateInstance($managerType, [object[]]@('GMAIL-PROBE', 'A1B2C3D4'))
@@ -28,11 +29,12 @@ try {
     [PSCustomObject]@{
         ProtectedStorage = [bool]$storage
         SelfRecipientMime = [bool]$mime
+        LargeReportPayload = [bool]$largePayload
         OAuthPkceAndScope = [bool]$oauth
         FixedRecipientUi = [bool]$fixedRecipientUi
     } | Format-List
 
-    if (-not $storage -or -not $mime -or -not $oauth -or -not $fixedRecipientUi) {
+    if (-not $storage -or -not $mime -or -not $largePayload -or -not $oauth -or -not $fixedRecipientUi) {
         throw 'Gmail notification probe failed.'
     }
 }
