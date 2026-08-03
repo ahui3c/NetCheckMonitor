@@ -170,7 +170,7 @@ namespace NetCheck
                 try
                 {
                     string email = AccountEmail;
-                    string subject = L.T("[NetCheckMonitor] 測試郵件", "[NetCheckMonitor] Test Email");
+                    string subject = BuildSubject(machineName, L.T("測試郵件", "Test Email"));
                     string body = L.T(
                         "這是 NetCheckMonitor 的測試郵件。\r\n\r\n寄件與收件帳戶：" + email + "\r\n電腦：" + machineName + " [" + machineId + "]\r\n時間：" + DateTime.Now.ToString("yyyy/MM/dd HH:mm:ss"),
                         "This is a NetCheckMonitor test email.\r\n\r\nSender and recipient: " + email + "\r\nComputer: " + machineName + " [" + machineId + "]\r\nTime: " + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"));
@@ -264,7 +264,7 @@ namespace NetCheck
                 {
                     TimeSpan duration = pending.RecoveredAt - pending.OutageStart;
                     if (duration < TimeSpan.Zero) duration = TimeSpan.Zero;
-                    string subject = L.T("[NetCheckMonitor] 網路已恢復", "[NetCheckMonitor] Internet Connection Restored");
+                    string subject = BuildSubject(machineName, L.T("網路已恢復", "Internet Connection Restored"));
                     string body = L.T(
                         "NetCheckMonitor 已確認網路恢復。\r\n\r\n電腦：" + machineName + " [" + machineId + "]\r\n斷線開始：" + pending.OutageStart.ToString("yyyy/MM/dd HH:mm:ss") + "\r\n恢復時間：" + pending.RecoveredAt.ToString("yyyy/MM/dd HH:mm:ss") + "\r\n持續時間：" + FormatDuration(duration) + "\r\n失敗檢查次數：" + pending.FailedChecks,
                         "NetCheckMonitor confirmed that the internet connection was restored.\r\n\r\nComputer: " + machineName + " [" + machineId + "]\r\nOutage started: " + pending.OutageStart.ToString("yyyy-MM-dd HH:mm:ss") + "\r\nRecovered: " + pending.RecoveredAt.ToString("yyyy-MM-dd HH:mm:ss") + "\r\nDuration: " + FormatDuration(duration) + "\r\nFailed checks: " + pending.FailedChecks);
@@ -301,11 +301,12 @@ namespace NetCheck
                 string temp = Path.Combine(Path.GetTempPath(), "NetCheckGmail_" + Guid.NewGuid().ToString("N"));
                 try
                 {
-                    string[] artifacts = ArchiveReport.ExportDailyArtifacts(temp, machineName, machineId, day.Date);
-                    string subject = L.T("[NetCheckMonitor] 每日網路報表 ", "[NetCheckMonitor] Daily Network Report ") + day.ToString("yyyy-MM-dd");
+                    string[] artifacts = ArchiveReport.ExportDailyDeliveryArtifacts(temp, machineName, machineId, day.Date);
+                    bool includesSpeedReport = artifacts.Length > 2;
+                    string subject = BuildSubject(machineName, L.T("每日網路報表", "Daily Network Report")) + " " + day.ToString("yyyy-MM-dd");
                     string body = L.T(
-                        "附件是 NetCheckMonitor " + day.ToString("yyyy/MM/dd") + " 的每日網路監控報表。\r\n\r\n電腦：" + machineName + " [" + machineId + "]\r\n收件帳戶：" + AccountEmail + "\r\n附件：PDF 報表、原始 CSV",
-                        "Attached is the NetCheckMonitor daily network report for " + day.ToString("yyyy-MM-dd") + ".\r\n\r\nComputer: " + machineName + " [" + machineId + "]\r\nRecipient: " + AccountEmail + "\r\nAttachments: PDF report and raw CSV");
+                        "附件是 NetCheckMonitor " + day.ToString("yyyy/MM/dd") + " 的每日網路監控報表。\r\n\r\n電腦：" + machineName + " [" + machineId + "]\r\n收件帳戶：" + AccountEmail + "\r\n附件：PDF 報表、原始 CSV" + (includesSpeedReport ? "、定時測速 HTML 報表與測速原始 CSV" : ""),
+                        "Attached is the NetCheckMonitor daily network report for " + day.ToString("yyyy-MM-dd") + ".\r\n\r\nComputer: " + machineName + " [" + machineId + "]\r\nRecipient: " + AccountEmail + "\r\nAttachments: PDF report and raw CSV" + (includesSpeedReport ? ", scheduled speed-test HTML report and raw speed-test CSV" : ""));
                     SendSelfEmail(subject, body, artifacts);
                     lock (sync)
                     {
@@ -361,6 +362,15 @@ namespace NetCheck
             var serializer = new JavaScriptSerializer();
             serializer.MaxJsonLength = Int32.MaxValue;
             return Utf8(serializer.Serialize(payload));
+        }
+
+        private static string BuildSubject(string computerName, string title)
+        {
+            string safeName = (computerName ?? "").Replace('\r', ' ').Replace('\n', ' ').Trim();
+            while (safeName.IndexOf("  ", StringComparison.Ordinal) >= 0) safeName = safeName.Replace("  ", " ");
+            if (safeName.Length == 0) safeName = "Unknown-PC";
+            if (safeName.Length > 64) safeName = safeName.Substring(0, 64);
+            return "[NetCheckMonitor][" + safeName + "] " + (title ?? "").Trim();
         }
 
         private string GetAccessToken()
@@ -504,7 +514,9 @@ namespace NetCheck
                 {
                     if (String.IsNullOrEmpty(path) || !File.Exists(path)) continue;
                     string name = Path.GetFileName(path);
-                    string mime = String.Equals(Path.GetExtension(path), ".pdf", StringComparison.OrdinalIgnoreCase) ? "application/pdf" : "text/csv";
+                    string extension = Path.GetExtension(path);
+                    string mime = String.Equals(extension, ".pdf", StringComparison.OrdinalIgnoreCase) ? "application/pdf"
+                        : (String.Equals(extension, ".html", StringComparison.OrdinalIgnoreCase) || String.Equals(extension, ".htm", StringComparison.OrdinalIgnoreCase) ? "text/html" : "text/csv");
                     message.Append("--").Append(boundary).Append("\r\n");
                     message.Append("Content-Type: ").Append(mime).Append("; name=\"").Append(EncodedWord(name)).Append("\"\r\n");
                     message.Append("Content-Disposition: attachment; filename=\"").Append(EncodedWord(name)).Append("\"\r\n");
@@ -639,6 +651,22 @@ namespace NetCheck
                 && raw.IndexOf("other@example.com", StringComparison.OrdinalIgnoreCase) < 0;
         }
 
+        public static bool RunAttachmentMimeSelfTest()
+        {
+            string directory = Path.Combine(Path.GetTempPath(), "NetCheckGmailMime_" + Guid.NewGuid().ToString("N"));
+            try
+            {
+                Directory.CreateDirectory(directory);
+                string html = Path.Combine(directory, "speed.html");
+                string csv = Path.Combine(directory, "speed.csv");
+                File.WriteAllText(html, "<html></html>", Encoding.UTF8);
+                File.WriteAllText(csv, "header", Encoding.UTF8);
+                string raw = Encoding.UTF8.GetString(BuildSelfMime("self@example.com", "report", "body", new string[] { html, csv }));
+                return raw.Contains("Content-Type: text/html;") && raw.Contains("Content-Type: text/csv;");
+            }
+            finally { try { if (Directory.Exists(directory)) Directory.Delete(directory, true); } catch { } }
+        }
+
         public static bool RunLargePayloadSelfTest()
         {
             byte[] mime = new byte[1600000];
@@ -649,6 +677,16 @@ namespace NetCheck
                 && text.StartsWith("{\"raw\":\"", StringComparison.Ordinal)
                 && text.EndsWith("\"}", StringComparison.Ordinal)
                 && text.IndexOf(Base64Url(new byte[] { 0, 1, 2, 3 }), StringComparison.Ordinal) > 0;
+        }
+
+        public static bool RunSubjectSelfTest()
+        {
+            string daily = BuildSubject("OFFICE-PC", "每日網路報表") + " 2026-07-30";
+            string sanitized = BuildSubject("LINE1\r\nLINE2", "Test Email");
+            return daily == "[NetCheckMonitor][OFFICE-PC] 每日網路報表 2026-07-30"
+                && sanitized == "[NetCheckMonitor][LINE1 LINE2] Test Email"
+                && sanitized.IndexOf('\r') < 0
+                && sanitized.IndexOf('\n') < 0;
         }
 
         public static bool RunOAuthRequestSelfTest()
@@ -802,8 +840,8 @@ namespace NetCheck
                 Size = new Size(635, 52),
                 ForeColor = Color.DimGray
             };
-            dailyReport.Text = L.T("每日寄送 PDF 與 CSV 報表", "Email the PDF and CSV report daily");
-            dailyReport.SetBounds(28, 186, 430, 28);
+            dailyReport.Text = L.T("每日寄送網路監控與定時測速報表（如有）", "Email daily monitoring and scheduled speed-test reports (when available)");
+            dailyReport.SetBounds(28, 186, 620, 28);
             recoveryNotification.Text = L.T("網路恢復後寄送通知", "Send a notification after the internet connection recovers");
             recoveryNotification.SetBounds(28, 220, 530, 28);
             var scheduleLabel = new Label { Text = L.T("每日寄送時間", "Daily send time"), AutoSize = true, Location = new Point(51, 267) };

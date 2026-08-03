@@ -378,7 +378,7 @@ namespace NetCheck
                     ZipArchiveEntry manifestEntry = archive.CreateEntry("Backup_Manifest.txt", CompressionLevel.Optimal);
                     using (var writer = new StreamWriter(manifestEntry.Open(), new UTF8Encoding(true)))
                     {
-                        writer.WriteLine("NetCheckMonitor 0.9.10");
+                        writer.WriteLine("NetCheckMonitor 0.9.11");
                         writer.WriteLine("Exported: " + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss zzz"));
                         writer.WriteLine("Computer: " + Environment.MachineName);
                         writer.WriteLine("Files: " + count);
@@ -401,6 +401,21 @@ namespace NetCheck
             ExportPdf(pdf, false, day.Date, day.Date);
             CreateDailyCsv(csv, machineName, machineId, day.Date);
             return new string[] { pdf, csv };
+        }
+
+        public static string[] ExportDailyDeliveryArtifacts(string outputDirectory, string machineName, string machineId, DateTime day)
+        {
+            var artifacts = new List<string>(ExportDailyArtifacts(outputDirectory, machineName, machineId, day));
+            artifacts.AddRange(ExportScheduledSpeedArtifactsIfEnabled(outputDirectory, machineName, machineId, day));
+            return artifacts.ToArray();
+        }
+
+        public static string[] ExportScheduledSpeedArtifactsIfEnabled(string outputDirectory, string machineName, string machineId, DateTime day)
+        {
+            MonitorTargetSettings settings = MonitorSettingsStore.Load();
+            if (settings != null && settings.SpeedTest != null && settings.SpeedTest.ScheduledEnabled)
+                return SpeedTrendReport.ExportDailyArtifacts(outputDirectory, machineName, machineId, day);
+            return new string[0];
         }
 
         public static bool HasChecksForDay(DateTime day)

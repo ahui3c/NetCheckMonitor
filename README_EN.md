@@ -6,14 +6,15 @@
 
 NetCheckMonitor is a free, open-source, ad-free Windows utility that periodically checks whether a computer can reach the public Internet. It records outages over hours or days and creates graphical HTML and PDF reports suitable for troubleshooting home Internet service or documenting connection problems for an ISP.
 
-Current version: **0.9.10**
+Current version: **0.9.11**
 
-## What's new in 0.9.10
+## What's new in 0.9.11
 
-- Fixes Gmail delivery failures when a larger daily PDF/CSV report exceeds the default .NET JSON length limit.
-- Adds an automated Gmail payload test above 2 MB to protect large-report packaging and delivery.
+- Adds the computer name to Gmail test, recovery, and daily-report subjects for easier identification.
+- Stores Drive backups under `Net_Check/computer name` to organize multiple computers in one account.
+- When scheduled speed-test data exists, Drive and Gmail daily delivery also include its HTML report and raw CSV.
 
-See the complete [0.9.10 release notes](docs/RELEASE_NOTES_0.9.10.md).
+See the complete [0.9.11 release notes](docs/RELEASE_NOTES_0.9.11.md).
 
 ## Download
 
@@ -44,8 +45,9 @@ See the complete [0.9.10 release notes](docs/RELEASE_NOTES_0.9.10.md).
 - Active-session state is saved durably. After a crash or Windows restart, the original CSV can be resumed while time when the app was not running is marked and excluded.
 - Settings can independently launch NetCheckMonitor after Windows sign-in and start monitoring automatically when the app opens. An unfinished session is offered for recovery first.
 - Startup checks whether NetCheckMonitor is already running. A duplicate launch shows the existing window instead of creating a second monitoring process.
-- Performs scheduled daily Google Drive backups of the complete PDF and raw CSV to `Net_Check`.
+- Performs scheduled daily Google Drive backups of the complete PDF and raw CSV to `Net_Check/computer name`, keeping multiple computers organized in one Drive.
 - Optionally signs in to Gmail to email the daily PDF and CSV report to that same signed-in account, send a recovery notice after a confirmed outage, and send a test message. Sender and recipient are fixed to the same account.
+- When scheduled speed testing is enabled and that day has speed-test records, Drive backup and Gmail delivery also include a daily speed-test HTML report and raw speed-test CSV. The normal monitoring report still succeeds on days without speed-test data.
 - Settings can prevent Windows sleep while monitoring and can separately block shutdown or restart. When shutdown protection is enabled, use the lower-right **Exit and Stop Monitoring** button first. Forced updates, power loss, and hardware resets can still interrupt the app.
 - Speed testing is currently marked Beta and is available only as an optional scheduled Cloudflare test; the main window does not provide an on-demand test button. Quick, Standard, and Full multi-stream levels are available in Settings.
 - Optional scheduled speed tests can run every 1–168 hours (24 hours by default and disabled by default), only while monitoring is active and not paused. Metered, roaming, or over-limit connections are skipped by default; when explicitly allowed, each run still requires two warnings.

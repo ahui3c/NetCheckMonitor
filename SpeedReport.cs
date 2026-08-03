@@ -11,7 +11,7 @@ namespace NetCheck
     {
         private sealed class Item
         {
-            internal DateTime Time; internal string Status; internal string Level; internal string Mode; internal double Down; internal double Up; internal double Latency; internal double Jitter; internal long Bytes; internal string Adapter; internal string ConnectionType; internal int WifiSignal; internal string Error;
+            internal DateTime Time; internal string Status; internal string Level; internal string Mode; internal double Down; internal double Up; internal double Latency; internal double Jitter; internal long Bytes; internal string Adapter; internal string ConnectionType; internal int WifiSignal; internal string Error; internal string RawLine;
         }
         private sealed class Daily
         {
@@ -30,6 +30,29 @@ namespace NetCheck
         {
             string path = Create(machineName, machineId);
             Process.Start(new ProcessStartInfo(path) { UseShellExecute = true });
+        }
+
+        internal static string[] ExportDailyArtifacts(string outputDirectory, string machineName, string machineId, DateTime day)
+        {
+            DateTime start = day.Date;
+            DateTime end = start.AddDays(1);
+            List<Item> items = Load(machineId).FindAll(delegate (Item item)
+            {
+                return item.Time >= start && item.Time < end && String.Equals(item.Mode, "Scheduled", StringComparison.OrdinalIgnoreCase);
+            });
+            if (items.Count == 0) return new string[0];
+
+            Directory.CreateDirectory(outputDirectory);
+            string stem = "NetCheck_Speed_" + SpeedTestStorage.Safe(machineName, 16) + "-" + machineId + "_" + start.ToString("yyyyMMdd");
+            string html = Path.Combine(outputDirectory, stem + "_Report.html");
+            string csv = Path.Combine(outputDirectory, stem + "_Raw.csv");
+            File.WriteAllText(html, BuildHtml(machineName, machineId, items), new UTF8Encoding(true));
+            using (var writer = new StreamWriter(csv, false, new UTF8Encoding(true)))
+            {
+                writer.WriteLine("Timestamp,Type,Status,LatencyMs,Target,Detail");
+                foreach (Item item in items) writer.WriteLine(item.RawLine);
+            }
+            return new string[] { html, csv };
         }
 
         private static List<Item> Load(string machineId)
@@ -55,7 +78,7 @@ namespace NetCheck
                                 DateTime time; if (!DateTime.TryParse(f[0], CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out time)) continue;
                                 var values = ParseDetail(f[5]);
                                 string id; if (values.TryGetValue("MachineId", out id) && !String.IsNullOrEmpty(machineId) && !String.Equals(id, machineId, StringComparison.OrdinalIgnoreCase)) continue;
-                                var item = new Item { Time = time, Status = f[2] };
+                                var item = new Item { Time = time, Status = f[2], RawLine = line };
                                 Double.TryParse(f[3], NumberStyles.Float, CultureInfo.InvariantCulture, out item.Latency);
                                 Get(values, "Level", out item.Level); Get(values, "Mode", out item.Mode); GetDouble(values, "DownloadMbps", out item.Down); GetDouble(values, "UploadMbps", out item.Up); GetDouble(values, "JitterMs", out item.Jitter);
                                 long downBytes, upBytes; GetLong(values, "DownloadBytes", out downBytes); GetLong(values, "UploadBytes", out upBytes); item.Bytes = downBytes + upBytes;
