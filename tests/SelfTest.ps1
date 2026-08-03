@@ -66,7 +66,7 @@ $aboutButtonLayout = $aboutButton.Text -eq '關於' -and $aboutButton.Width -le 
 $settingsButtonLayout = $settingsButton.Text -eq '設定' -and $settingsButton.Width -le 90 -and $settingsButton.Top -ge 495
 $pauseButton = $type.GetField('pauseButton', $flags).GetValue($form)
 $eventNoteButtonLayout = $eventNoteButton.Text -eq '事件註記' -and $eventNoteButton.Height -eq $pauseButton.Height -and $eventNoteButton.Top -eq $pauseButton.Top -and $eventNoteButton.Left -gt $pauseButton.Right -and ($eventNoteButton.Left - $pauseButton.Right) -le 12
-$homeVersionLabel = $versionLabel.Text -eq 'v0.9.10' -and $versionLabel.Font.Size -le 8.5 -and $versionLabel.ForeColor -eq [Drawing.Color]::DarkGray
+$homeVersionLabel = $versionLabel.Text -eq 'v0.9.11' -and $versionLabel.Font.Size -le 8.5 -and $versionLabel.ForeColor -eq [Drawing.Color]::DarkGray
 $monitorSettingsType = $assembly.GetType('NetCheck.MonitorSettingsStore', $true)
 $monitorSettingsStorageMethod = $monitorSettingsType.GetMethod('RunStorageSelfTest', [Reflection.BindingFlags]'Static,Public')
 $monitorSettingsStorage = $monitorSettingsStorageMethod.Invoke($null, [object[]]@($env:NETCHECK_MONITOR_SETTINGS))
@@ -133,9 +133,9 @@ $aboutFormType = $assembly.GetType('NetCheck.AboutForm', $true)
 $aboutForm = [Activator]::CreateInstance($aboutFormType)
 $checkVersionButton = $aboutFormType.GetField('checkVersionButton', $flags).GetValue($aboutForm)
 $isNewerVersionMethod = $aboutFormType.GetMethod('IsNewerVersion', [Reflection.BindingFlags]'Static,NonPublic')
-$versionComparison = $isNewerVersionMethod.Invoke($null, @('v0.9.11')) -and -not $isNewerVersionMethod.Invoke($null, @('v0.9.10')) -and -not $isNewerVersionMethod.Invoke($null, @('v0.9.9'))
+$versionComparison = $isNewerVersionMethod.Invoke($null, @('v0.9.12')) -and -not $isNewerVersionMethod.Invoke($null, @('v0.9.11')) -and -not $isNewerVersionMethod.Invoke($null, @('v0.9.10'))
 $aboutText = @($aboutForm.Controls | ForEach-Object { $_.Text }) -join "`n"
-$aboutPageContent = $aboutForm.Text -eq '關於 NetCheckMonitor' -and $aboutText.Contains('NetCheckMonitor') -and $aboutText.Contains('版本 0.9.10') -and $aboutText.Contains('可定時監控對外網路連線，紀錄斷線並產生圖文報表，並支援網路硬碟備份，PDF 下載，程式完全免費開源無廣告。') -and $aboutText.Contains('廖阿輝') -and $aboutText.Contains('chehui@gmail.com') -and $aboutText.Contains('https://ahui3c.com') -and $aboutText.Contains('https://github.com/ahui3c/NetCheckMonitor') -and $checkVersionButton.Text -eq '檢查新版本'
+$aboutPageContent = $aboutForm.Text -eq '關於 NetCheckMonitor' -and $aboutText.Contains('NetCheckMonitor') -and $aboutText.Contains('版本 0.9.11') -and $aboutText.Contains('可定時監控對外網路連線，紀錄斷線並產生圖文報表，並支援網路硬碟備份，PDF 下載，程式完全免費開源無廣告。') -and $aboutText.Contains('廖阿輝') -and $aboutText.Contains('chehui@gmail.com') -and $aboutText.Contains('https://ahui3c.com') -and $aboutText.Contains('https://github.com/ahui3c/NetCheckMonitor') -and $checkVersionButton.Text -eq '檢查新版本'
 $aboutLabels = @($aboutForm.Controls | Where-Object { $_ -is [Windows.Forms.Label] })
 $aboutLinks = @($aboutForm.Controls | Where-Object { $_ -is [Windows.Forms.LinkLabel] })
 $aboutWebsiteLink = @($aboutLinks | Where-Object { $_.Text -eq 'https://ahui3c.com' })
@@ -144,7 +144,7 @@ $aboutUrlLinkScope = [bool]($aboutLabels | Where-Object { $_.Text -eq '網站：
     [bool]($aboutLabels | Where-Object { $_.Text -eq 'GitHub 專案：' }) -and
     $aboutWebsiteLink.Count -eq 1 -and $aboutWebsiteLink[0].LinkArea.Start -eq 0 -and $aboutWebsiteLink[0].LinkArea.Length -eq $aboutWebsiteLink[0].Text.Length -and
     $aboutGitHubLink.Count -eq 1 -and $aboutGitHubLink[0].LinkArea.Start -eq 0 -and $aboutGitHubLink[0].LinkArea.Length -eq $aboutGitHubLink[0].Text.Length
-$programIdentity = $form.Text -eq '對外網路連線能力監控程式' -and $assembly.GetName().Version.ToString() -eq '0.9.10.0'
+$programIdentity = $form.Text -eq '對外網路連線能力監控程式' -and $assembly.GetName().Version.ToString() -eq '0.9.11.0'
 $applicationRecoveryType = $assembly.GetType('NetCheck.ApplicationRecovery', $true)
 $applicationRestartRegistered = $null -ne $applicationRecoveryType.GetMethod('Register', [Reflection.BindingFlags]'Static,Public')
 $embeddedIcon = [Drawing.Icon]::ExtractAssociatedIcon((Join-Path $testRoot 'NetCheckMonitor.exe'))
@@ -263,22 +263,25 @@ $embeddedCredentialsMethod = $cloudManagerType.GetMethod('EmbeddedCredentials', 
 $embeddedCredentials = $embeddedCredentialsMethod.Invoke($null, @())
 $oauthBuiltInClient = $embeddedCredentials.ClientId -match '^[0-9]+-[a-z0-9]+\.apps\.googleusercontent\.com$' -and -not [string]::IsNullOrWhiteSpace($embeddedCredentials.ClientSecret) -and $embeddedCredentials.TokenUri -eq 'https://oauth2.googleapis.com/token'
 $oauthRequestForms = $cloudManagerType.GetMethod('RunOAuthRequestSelfTest', [Reflection.BindingFlags]'Static,Public').Invoke($null, @())
+$cloudComputerFolder = $cloudManagerType.GetMethod('RunComputerFolderSelfTest', [Reflection.BindingFlags]'Static,Public').Invoke($null, @())
 $cloudFormType = $assembly.GetType('NetCheck.CloudBackupForm', $true)
 $cloudManager = [Activator]::CreateInstance($cloudManagerType, [object[]]@([Environment]::MachineName, 'A1B2C3D4'))
 $cloudForm = [Activator]::CreateInstance($cloudFormType, [object[]]@($cloudManager))
 $cloudConnectButton = $cloudFormType.GetField('connect', $flags).GetValue($cloudForm)
-$oauthLoginOnlyUi = $cloudConnectButton.Text -eq '登入 Google Drive' -and $null -eq $cloudFormType.GetMethod('Open', [Reflection.BindingFlags]'Static,NonPublic')
+$cloudFormText = @($cloudForm.Controls | ForEach-Object { $_.Text }) -join "`n"
+$oauthLoginOnlyUi = $cloudConnectButton.Text -eq '登入 Google Drive' -and $cloudFormText.Contains('Drive / Net_Check / 電腦名稱') -and $null -eq $cloudFormType.GetMethod('Open', [Reflection.BindingFlags]'Static,NonPublic')
 $gmailManagerType = $assembly.GetType('NetCheck.GmailNotificationManager', $true)
 [string]$gmailStorageTest = Join-Path $testRoot 'Gmail\storage-selftest.dat'
 $gmailStorageProtected = $gmailManagerType.GetMethod('RunStorageSelfTest', [Reflection.BindingFlags]'Static,Public').Invoke($null, [object[]]@($gmailStorageTest))
 $gmailSelfRecipientMime = $gmailManagerType.GetMethod('RunMimeSelfTest', [Reflection.BindingFlags]'Static,Public').Invoke($null, @())
 $gmailLargeReportPayload = $gmailManagerType.GetMethod('RunLargePayloadSelfTest', [Reflection.BindingFlags]'Static,Public').Invoke($null, @())
+$gmailMachineNameSubject = $gmailManagerType.GetMethod('RunSubjectSelfTest', [Reflection.BindingFlags]'Static,Public').Invoke($null, @())
 $gmailOAuthRequest = $gmailManagerType.GetMethod('RunOAuthRequestSelfTest', [Reflection.BindingFlags]'Static,Public').Invoke($null, @())
 $gmailManager = [Activator]::CreateInstance($gmailManagerType, [object[]]@([Environment]::MachineName, 'A1B2C3D4'))
 $gmailFormType = $assembly.GetType('NetCheck.GmailNotificationForm', $true)
 $gmailForm = [Activator]::CreateInstance($gmailFormType, [object[]]@($gmailManager))
 $gmailFormText = @($gmailForm.Controls | ForEach-Object { $_.Text }) -join "`n"
-$gmailFixedSelfRecipientUi = $gmailForm.Text -eq 'Gmail 報表與恢復通知' -and $gmailFormText.Contains('寄件者與收件者固定為登入的同一個 Google 帳戶') -and $gmailFormText.Contains('每日寄送 PDF 與 CSV 報表') -and $gmailFormText.Contains('網路恢復後寄送通知') -and $gmailFormText.Contains('寄送測試郵件') -and @($gmailForm.Controls | Where-Object { $_ -is [Windows.Forms.TextBox] }).Count -eq 0
+$gmailFixedSelfRecipientUi = $gmailForm.Text -eq 'Gmail 報表與恢復通知' -and $gmailFormText.Contains('寄件者與收件者固定為登入的同一個 Google 帳戶') -and $gmailFormText.Contains('每日寄送網路監控與定時測速報表（如有）') -and $gmailFormText.Contains('網路恢復後寄送通知') -and $gmailFormText.Contains('寄送測試郵件') -and @($gmailForm.Controls | Where-Object { $_ -is [Windows.Forms.TextBox] }).Count -eq 0
 $languageType = $assembly.GetType('NetCheck.L', $true)
 $languageMethod = $languageType.GetMethod('IsTraditionalChineseLanguage', [Reflection.BindingFlags]'Static,NonPublic')
 $languageRouting = $languageMethod.Invoke($null, @('zh-TW')) -and $languageMethod.Invoke($null, @('zh-HK')) -and $languageMethod.Invoke($null, @('zh-MO')) -and $languageMethod.Invoke($null, @('zh-Hant')) -and $languageMethod.Invoke($null, @('zh-Hant-TW')) -and -not $languageMethod.Invoke($null, @('zh-CN')) -and -not $languageMethod.Invoke($null, @('en-US')) -and -not $languageMethod.Invoke($null, @('ja-JP'))
@@ -432,12 +435,14 @@ $result = [PSCustomObject]@{
     CloudDailyPdf = ($cloudPdf.Count -eq 1) -and (Test-Path $cloudPdf[0]) -and ([Text.Encoding]::ASCII.GetString([IO.File]::ReadAllBytes($cloudPdf[0]), 0, 5) -eq '%PDF-')
     CloudDailyCsv = ($cloudCsv.Count -eq 1) -and (Test-Path $cloudCsv[0]) -and ((Get-Content -LiteralPath $cloudCsv[0] -TotalCount 1) -eq 'Timestamp,Type,Status,LatencyMs,Target,Detail') -and ((Split-Path $cloudCsv[0] -Leaf) -match '^NetCheck_.+-A1B2C3D4_\d{8}_Raw\.csv$')
     CloudStorageProtected = [bool]$cloudStorageProtected
+    CloudComputerFolder = [bool]$cloudComputerFolder
     OAuthBuiltInClient = $oauthBuiltInClient
     OAuthRequestForms = [bool]$oauthRequestForms
     OAuthLoginOnlyUi = $oauthLoginOnlyUi
     GmailStorageProtected = [bool]$gmailStorageProtected
     GmailSelfRecipientMime = [bool]$gmailSelfRecipientMime
     GmailLargeReportPayload = [bool]$gmailLargeReportPayload
+    GmailMachineNameSubject = [bool]$gmailMachineNameSubject
     GmailOAuthRequest = [bool]$gmailOAuthRequest
     GmailFixedSelfRecipientUi = [bool]$gmailFixedSelfRecipientUi
     LanguageRouting = [bool]$languageRouting
@@ -466,7 +471,7 @@ if (-not $result.CsvCreated -or -not $result.HtmlCreated -or -not $result.LiveHt
     -not $result.ReportHasDailyStats -or -not $result.ReportHasEnhancedSummary -or -not $result.ReportHasNetworkInfo -or -not $result.ReportHasAdvancedDiagnostics -or -not $result.ReportHasEventNotes -or -not $result.ArchiveReportHasNetworkInfo -or -not $result.ArchiveReportHasAdvancedDiagnostics -or -not $result.ArchiveReportHasEventNotes -or -not $result.ArchiveReportHasDailyDetails -or -not $result.ReportHasComputer -or -not $result.ComputerMarker -or -not $result.TargetMarker -or -not $result.NetworkMarker -or -not $result.PowerProtectionMarker -or -not $result.EventNoteMarker -or -not $result.SuspectedCheck -or -not $result.ConfirmedOfflineCheck -or -not $result.OutageConfirmedMarker -or -not $result.FastRetrySpacing -or -not $result.BoundedOutageBackoff -or -not $result.UniqueFileName -or
     -not $result.DailyOutageCalculated -or -not $result.AllPdfCreated -or -not $result.DatePdfCreated -or -not $result.ClearAllPassed -or
     -not $result.DownloadButtonLabel -or -not $result.ExitButtonLayout -or -not $result.ExitSaveCompleted -or -not $result.ClearRemovedFromPdfDialog -or
-    -not $result.MainManagementButtonsRemoved -or -not $result.SettingsManagementButtons -or -not $result.StartButtonSinglePurpose -or -not $result.AboutButtonLayout -or -not $result.SettingsButtonLayout -or -not $result.EventNoteButtonLayout -or -not $result.HomeSpeedButtonsRemoved -or -not $result.SpeedSettingsPageContent -or -not $result.HomeVersionLabel -or -not $result.NetworkStatusCapture -or -not $result.NetworkInfoLabel -or -not $result.OnlineTrayStatus -or -not $result.OfflineTrayStatus -or -not $result.MonitorSettingsStorage -or -not $result.PortableSettingsMigration -or -not $result.AdvancedDiagnosticsClassification -or -not $result.AdvancedToggleNoRestart -or -not $result.PowerProtectionIntegration -or -not $result.ShutdownBlockDecision -or -not $result.CloseReminderStoredOnce -or -not $result.SessionStateStorage -or -not $result.ActiveStateCreated -or -not $result.ActiveStateCleared -or -not $result.ApplicationRestartRegistered -or -not $result.SingleInstanceGuard -or -not $result.DuplicateLaunchShowsExisting -or -not $result.SessionResumeIntegration -or -not $result.AutoStartMonitoring -or -not $result.RecoveryBeforeAutoStart -or -not $result.SettingsPageContent -or -not $result.SettingsLanguageSelection -or -not $result.SettingsHidesBuiltInTargets -or -not $result.SettingsCompactLayout -or -not $result.CustomTargetSequence -or -not $result.SettingsAvailableDuringMonitoring -or -not $result.EventNoteAvailableDuringMonitoring -or -not $result.EventNoteDialogContent -or -not $result.SettingsRestartIntegration -or -not $result.SettingsReenabledAfterMonitoring -or -not $result.AboutPageContent -or -not $result.AboutUrlLinkScope -or -not $result.UpdateVersionComparison -or -not $result.Tls12UpdateCheck -or -not $result.ProgramIdentity -or -not $result.CustomIconEmbedded -or -not $result.CloudDailyPdf -or -not $result.CloudDailyCsv -or -not $result.CloudStorageProtected -or
-    -not $result.OAuthBuiltInClient -or -not $result.OAuthRequestForms -or -not $result.OAuthLoginOnlyUi -or -not $result.GmailStorageProtected -or -not $result.GmailSelfRecipientMime -or -not $result.GmailLargeReportPayload -or -not $result.GmailOAuthRequest -or -not $result.GmailFixedSelfRecipientUi -or -not $result.LanguageRouting -or -not $result.LanguageStorage -or -not $result.FirstRunLanguageSelection -or -not $result.EnglishUi) {
+    -not $result.MainManagementButtonsRemoved -or -not $result.SettingsManagementButtons -or -not $result.StartButtonSinglePurpose -or -not $result.AboutButtonLayout -or -not $result.SettingsButtonLayout -or -not $result.EventNoteButtonLayout -or -not $result.HomeSpeedButtonsRemoved -or -not $result.SpeedSettingsPageContent -or -not $result.HomeVersionLabel -or -not $result.NetworkStatusCapture -or -not $result.NetworkInfoLabel -or -not $result.OnlineTrayStatus -or -not $result.OfflineTrayStatus -or -not $result.MonitorSettingsStorage -or -not $result.PortableSettingsMigration -or -not $result.AdvancedDiagnosticsClassification -or -not $result.AdvancedToggleNoRestart -or -not $result.PowerProtectionIntegration -or -not $result.ShutdownBlockDecision -or -not $result.CloseReminderStoredOnce -or -not $result.SessionStateStorage -or -not $result.ActiveStateCreated -or -not $result.ActiveStateCleared -or -not $result.ApplicationRestartRegistered -or -not $result.SingleInstanceGuard -or -not $result.DuplicateLaunchShowsExisting -or -not $result.SessionResumeIntegration -or -not $result.AutoStartMonitoring -or -not $result.RecoveryBeforeAutoStart -or -not $result.SettingsPageContent -or -not $result.SettingsLanguageSelection -or -not $result.SettingsHidesBuiltInTargets -or -not $result.SettingsCompactLayout -or -not $result.CustomTargetSequence -or -not $result.SettingsAvailableDuringMonitoring -or -not $result.EventNoteAvailableDuringMonitoring -or -not $result.EventNoteDialogContent -or -not $result.SettingsRestartIntegration -or -not $result.SettingsReenabledAfterMonitoring -or -not $result.AboutPageContent -or -not $result.AboutUrlLinkScope -or -not $result.UpdateVersionComparison -or -not $result.Tls12UpdateCheck -or -not $result.ProgramIdentity -or -not $result.CustomIconEmbedded -or -not $result.CloudDailyPdf -or -not $result.CloudDailyCsv -or -not $result.CloudStorageProtected -or -not $result.CloudComputerFolder -or
+    -not $result.OAuthBuiltInClient -or -not $result.OAuthRequestForms -or -not $result.OAuthLoginOnlyUi -or -not $result.GmailStorageProtected -or -not $result.GmailSelfRecipientMime -or -not $result.GmailLargeReportPayload -or -not $result.GmailMachineNameSubject -or -not $result.GmailOAuthRequest -or -not $result.GmailFixedSelfRecipientUi -or -not $result.LanguageRouting -or -not $result.LanguageStorage -or -not $result.FirstRunLanguageSelection -or -not $result.EnglishUi) {
     throw 'NetCheck self-test failed.'
 }

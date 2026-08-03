@@ -1,6 +1,6 @@
 # NetCheckMonitor User Guide (English)
 
-Version: 0.9.10
+Version: 0.9.11
 
 NetCheckMonitor periodically tests public Internet connectivity, records outages, and produces graphical reports. It supports Google Drive backup and PDF downloads and is completely free, open source, and ad-free.
 
@@ -73,8 +73,9 @@ NetCheckMonitor periodically tests public Internet connectivity, records outages
 1. Open **Settings** → **Google Drive Backup Settings**.
 2. Select **Sign in to Google Drive**, sign in with your own account in the system browser, and grant permission.
 3. Set and save the daily backup time. The default is 23:55.
-4. The first successful connection creates or reuses `Net_Check` in Drive.
+4. The first successful connection creates or reuses `Net_Check` in Drive, then creates a child folder named after this computer. New backups are stored in `Net_Check/computer name`.
 5. A complete PDF and raw CSV are uploaded each day. Existing same-name files are updated instead of duplicated.
+6. When scheduled speed testing is enabled and records exist for that day, Drive backup and the Gmail daily message also include a daily speed-test HTML report and raw speed-test CSV. The normal monitoring PDF/CSV still runs on days without speed-test data.
 
 The app requests only the `drive.file` scope. Windows DPAPI encrypts the sign-in token for the current Windows account. NetCheckMonitor must remain running for an on-time backup; after a missed run, it prioritizes the most recent day at the next start.
 

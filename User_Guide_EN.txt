@@ -1,7 +1,7 @@
 NetCheckMonitor Network Connection Monitor (Portable Windows Edition)
 ===================================================================
 
-Version 0.9.10
+Version 0.9.11
 
 Interface language
 - On first launch, choose Traditional Chinese or English. The choice is saved and the prompt is not shown again.
@@ -63,7 +63,8 @@ Google Drive backup
 1. Open Settings > Google Drive Backup Settings.
 2. Select Sign in to Google Drive and authorize your own account in the system browser.
 3. Set the daily backup time. No Google Cloud project or credential download is required.
-- NetCheckMonitor creates or reuses Drive / Net_Check and uploads a complete PDF and raw CSV.
+- NetCheckMonitor creates or reuses Drive / Net_Check, creates a child folder named after this computer, and uploads the complete PDF and raw CSV there.
+- If scheduled speed testing is enabled and records exist for that day, Drive backup and the Gmail daily message also include a daily speed-test HTML report and raw speed-test CSV. Days without speed-test records still deliver the normal monitoring report.
 - The app requests only drive.file access.
 - Windows DPAPI encrypts the refresh token for the current Windows account.
 - The program must remain running for an on-time backup.

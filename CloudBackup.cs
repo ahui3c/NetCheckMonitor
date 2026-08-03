@@ -23,6 +23,8 @@ namespace NetCheck
         public string TokenUri { get; set; }
         public string RefreshToken { get; set; }
         public string FolderId { get; set; }
+        public string ComputerFolderId { get; set; }
+        public string ComputerFolderName { get; set; }
         public string Schedule { get; set; }
         public string LastBackupDay { get; set; }
     }
@@ -103,10 +105,12 @@ namespace NetCheck
                 config.TokenUri = credentials.TokenUri;
                 config.RefreshToken = result.RefreshToken;
                 config.FolderId = null;
+                config.ComputerFolderId = null;
+                config.ComputerFolderName = null;
                 accessToken = result.AccessToken;
                 accessTokenExpires = DateTime.UtcNow.AddSeconds(Math.Max(60, result.ExpiresIn - 60));
                 SaveConfig(settingsPath, config);
-                lastStatus = L.T("Google Drive 登入成功，將使用 Net_Check 資料夾。", "Google Drive sign-in succeeded. The Net_Check folder will be used.");
+                lastStatus = L.T("Google Drive 登入成功，將使用 Net_Check / " + SafeDriveFolderName(machineName) + " 資料夾。", "Google Drive sign-in succeeded. The Net_Check / " + SafeDriveFolderName(machineName) + " folder will be used.");
             }
             string token = GetAccessToken();
             EnsureFolder(token);
@@ -136,14 +140,15 @@ namespace NetCheck
                 string temp = Path.Combine(Path.GetTempPath(), "NetCheckCloud_" + Guid.NewGuid().ToString("N"));
                 try
                 {
-                    string[] artifacts = ArchiveReport.ExportDailyArtifacts(temp, machineName, machineId, day.Date);
+                    string[] artifacts = ArchiveReport.ExportDailyDeliveryArtifacts(temp, machineName, machineId, day.Date);
                     string token = GetAccessToken();
                     string folder = EnsureFolder(token);
-                    UploadOrReplace(token, folder, artifacts[0], "application/pdf");
-                    UploadOrReplace(token, folder, artifacts[1], "text/csv");
+                    foreach (string artifact in artifacts) UploadOrReplace(token, folder, artifact, ArtifactContentType(artifact));
                     lock (sync) { config.LastBackupDay = day.ToString("yyyy-MM-dd"); SaveConfig(settingsPath, config); }
                     ok = true;
-                    message = day.ToString("yyyy/MM/dd") + L.T(" PDF 與 CSV 已備份到 Google Drive / Net_Check。", " PDF and CSV were backed up to Google Drive / Net_Check.");
+                    message = day.ToString("yyyy/MM/dd") + (artifacts.Length > 2
+                        ? L.T(" 網路監控與定時測速報表已備份到 Google Drive / Net_Check / ", " network-monitoring and scheduled speed-test reports were backed up to Google Drive / Net_Check / ")
+                        : L.T(" PDF 與 CSV 已備份到 Google Drive / Net_Check / ", " PDF and CSV were backed up to Google Drive / Net_Check / ")) + SafeDriveFolderName(machineName) + L.T("。", ".");
                 }
                 catch (Exception ex) { message = L.T("雲端備份失敗：", "Cloud backup failed: ") + ex.Message; }
                 finally { try { if (Directory.Exists(temp)) Directory.Delete(temp, true); } catch { } SetThreadExecutionState(ES_CONTINUOUS); Interlocked.Exchange(ref backupRunning, 0); }
@@ -197,18 +202,76 @@ namespace NetCheck
 
         private string EnsureFolder(string token)
         {
-            lock (sync) if (!String.IsNullOrEmpty(config.FolderId)) return config.FolderId;
-            string query = "name = 'Net_Check' and mimeType = 'application/vnd.google-apps.folder' and trashed = false";
+            string rootId;
+            lock (sync) rootId = config.FolderId;
+            if (String.IsNullOrEmpty(rootId))
+            {
+                rootId = FindOrCreateFolder(token, "Net_Check", null);
+                if (String.IsNullOrEmpty(rootId)) throw new InvalidOperationException(L.T("無法建立或找到 Google Drive / Net_Check 資料夾。", "Could not create or find the Google Drive / Net_Check folder."));
+                lock (sync) { config.FolderId = rootId; SaveConfig(settingsPath, config); }
+            }
+
+            string computerFolder = SafeDriveFolderName(machineName);
+            lock (sync)
+            {
+                if (!String.IsNullOrEmpty(config.ComputerFolderId) && String.Equals(config.ComputerFolderName, computerFolder, StringComparison.Ordinal)) return config.ComputerFolderId;
+            }
+            string computerFolderId = FindOrCreateFolder(token, computerFolder, rootId);
+            if (String.IsNullOrEmpty(computerFolderId)) throw new InvalidOperationException(L.T("無法建立或找到 Google Drive / Net_Check / " + computerFolder + " 資料夾。", "Could not create or find the Google Drive / Net_Check / " + computerFolder + " folder."));
+            lock (sync)
+            {
+                config.ComputerFolderId = computerFolderId;
+                config.ComputerFolderName = computerFolder;
+                SaveConfig(settingsPath, config);
+            }
+            return computerFolderId;
+        }
+
+        private static string ArtifactContentType(string path)
+        {
+            string extension = Path.GetExtension(path);
+            if (String.Equals(extension, ".pdf", StringComparison.OrdinalIgnoreCase)) return "application/pdf";
+            if (String.Equals(extension, ".html", StringComparison.OrdinalIgnoreCase) || String.Equals(extension, ".htm", StringComparison.OrdinalIgnoreCase)) return "text/html";
+            return "text/csv";
+        }
+
+        private static string FindOrCreateFolder(string token, string name, string parentId)
+        {
+            string query = BuildFolderQuery(name, parentId);
             string url = "https://www.googleapis.com/drive/v3/files?q=" + Uri.EscapeDataString(query) + "&spaces=drive&fields=files(id,name)&pageSize=10";
             string id = FirstFileId(JsonObject(ApiRequest("GET", url, token, null, null)));
-            if (String.IsNullOrEmpty(id))
-            {
-                var meta = new Dictionary<string, object>(); meta["name"] = "Net_Check"; meta["mimeType"] = "application/vnd.google-apps.folder";
-                id = GetString(JsonObject(ApiRequest("POST", "https://www.googleapis.com/drive/v3/files?fields=id", token, "application/json; charset=UTF-8", Utf8(Json(meta)))), "id");
-            }
-            if (String.IsNullOrEmpty(id)) throw new InvalidOperationException(L.T("無法建立或找到 Google Drive / Net_Check 資料夾。", "Could not create or find the Google Drive / Net_Check folder."));
-            lock (sync) { config.FolderId = id; SaveConfig(settingsPath, config); }
-            return id;
+            if (!String.IsNullOrEmpty(id)) return id;
+            Dictionary<string, object> meta = BuildFolderMetadata(name, parentId);
+            return GetString(JsonObject(ApiRequest("POST", "https://www.googleapis.com/drive/v3/files?fields=id", token, "application/json; charset=UTF-8", Utf8(Json(meta)))), "id");
+        }
+
+        private static string BuildFolderQuery(string name, string parentId)
+        {
+            string query = "name = '" + EscapeDriveQuery(name) + "' and mimeType = 'application/vnd.google-apps.folder' and trashed = false";
+            if (!String.IsNullOrEmpty(parentId)) query += " and '" + EscapeDriveQuery(parentId) + "' in parents";
+            return query;
+        }
+
+        private static Dictionary<string, object> BuildFolderMetadata(string name, string parentId)
+        {
+            var meta = new Dictionary<string, object>();
+            meta["name"] = name;
+            meta["mimeType"] = "application/vnd.google-apps.folder";
+            if (!String.IsNullOrEmpty(parentId)) meta["parents"] = new string[] { parentId };
+            return meta;
+        }
+
+        private static string SafeDriveFolderName(string value)
+        {
+            string name = (value ?? "").Replace('\r', ' ').Replace('\n', ' ').Replace('/', '_').Replace('\\', '_').Trim();
+            while (name.IndexOf("  ", StringComparison.Ordinal) >= 0) name = name.Replace("  ", " ");
+            if (name.Length == 0) name = "Unknown-PC";
+            return name.Length > 64 ? name.Substring(0, 64) : name;
+        }
+
+        private static string EscapeDriveQuery(string value)
+        {
+            return (value ?? "").Replace("\\", "\\\\").Replace("'", "\\'");
         }
 
         private void UploadOrReplace(string token, string folderId, string path, string mimeType)
@@ -309,6 +372,26 @@ namespace NetCheck
             return code["client_secret"] == "test-secret" && code["code_verifier"] == "test-verifier" && refresh["client_secret"] == "test-secret" && refresh["refresh_token"] == "test-refresh";
         }
 
+        public static bool RunComputerFolderSelfTest()
+        {
+            string safe = SafeDriveFolderName("OFFICE/PC\r\nSECOND");
+            string query = BuildFolderQuery("O'Brien", "root-id");
+            Dictionary<string, object> meta = BuildFolderMetadata(safe, "root-id");
+            string[] parents = meta["parents"] as string[];
+            return safe == "OFFICE_PC SECOND"
+                && query.Contains("name = 'O\\'Brien'")
+                && query.Contains("'root-id' in parents")
+                && Convert.ToString(meta["name"], CultureInfo.InvariantCulture) == safe
+                && parents != null && parents.Length == 1 && parents[0] == "root-id";
+        }
+
+        public static bool RunArtifactContentTypeSelfTest()
+        {
+            return ArtifactContentType("report.pdf") == "application/pdf"
+                && ArtifactContentType("speed.html") == "text/html"
+                && ArtifactContentType("raw.csv") == "text/csv";
+        }
+
         private static CloudConfig NewConfig() { return new CloudConfig { Schedule = "23:55" }; }
         private static CloudConfig LoadConfig(string path)
         {
@@ -321,12 +404,12 @@ namespace NetCheck
 
         public static bool RunStorageSelfTest(string path)
         {
-            try { var c = NewConfig(); c.ClientId = "test-client"; c.RefreshToken = "test-refresh"; c.Schedule = "21:30"; SaveConfig(path, c); CloudConfig loaded = LoadConfig(path); return loaded != null && loaded.ClientId == c.ClientId && loaded.RefreshToken == c.RefreshToken && loaded.Schedule == c.Schedule; } finally { try { if (File.Exists(path)) File.Delete(path); } catch { } }
+            try { var c = NewConfig(); c.ClientId = "test-client"; c.RefreshToken = "test-refresh"; c.FolderId = "root-folder"; c.ComputerFolderId = "computer-folder"; c.ComputerFolderName = "OFFICE-PC"; c.Schedule = "21:30"; SaveConfig(path, c); CloudConfig loaded = LoadConfig(path); return loaded != null && loaded.ClientId == c.ClientId && loaded.RefreshToken == c.RefreshToken && loaded.FolderId == c.FolderId && loaded.ComputerFolderId == c.ComputerFolderId && loaded.ComputerFolderName == c.ComputerFolderName && loaded.Schedule == c.Schedule; } finally { try { if (File.Exists(path)) File.Delete(path); } catch { } }
         }
 
         private static string ApiRequest(string method, string url, string token, string contentType, byte[] body)
         {
-            var request = (HttpWebRequest)WebRequest.Create(url); request.Method = method; request.Timeout = 60000; request.ReadWriteTimeout = 60000; request.UserAgent = "NetCheckMonitor/0.9.10"; request.Headers[HttpRequestHeader.Authorization] = "Bearer " + token;
+            var request = (HttpWebRequest)WebRequest.Create(url); request.Method = method; request.Timeout = 60000; request.ReadWriteTimeout = 60000; request.UserAgent = "NetCheckMonitor/0.9.11"; request.Headers[HttpRequestHeader.Authorization] = "Bearer " + token;
             if (body != null) { request.ContentType = contentType; request.ContentLength = body.Length; using (Stream stream = request.GetRequestStream()) stream.Write(body, 0, body.Length); }
             try { using (var response = (HttpWebResponse)request.GetResponse()) using (var reader = new StreamReader(response.GetResponseStream())) return reader.ReadToEnd(); }
             catch (WebException ex) { throw new InvalidOperationException(ReadWebError(ex)); }
@@ -368,7 +451,7 @@ namespace NetCheck
             manager = cloud; Text = L.T("Google Drive 每日雲端備份", "Google Drive Daily Backup"); Font = new Font("Microsoft JhengHei UI", 10F); ClientSize = new Size(660, 360); FormBorderStyle = FormBorderStyle.FixedDialog; MaximizeBox = false; MinimizeBox = false; StartPosition = FormStartPosition.CenterParent;
             var title = new Label { Text = L.T("Google Drive 每日雲端備份", "Google Drive Daily Backup"), Font = new Font(Font.FontFamily, 17F, FontStyle.Bold), AutoSize = true, Location = new Point(24, 18) };
             connection.SetBounds(27, 62, 600, 28); connection.Font = new Font(Font.FontFamily, 11F, FontStyle.Bold);
-            var explain = new Label { Text = L.T("登入自己的 Google 帳號並同意權限後，每日會把完整 PDF 與原始 CSV 上傳到 Drive / Net_Check。\n程式必須保持執行；錯過時間時，下次啟動會優先補傳最近一天。", "Sign in with your Google account and grant permission to upload the full PDF and raw CSV to Drive / Net_Check each day.\nThe program must remain running. If a backup is missed, the most recent day is uploaded first at the next start."), AutoSize = false, Location = new Point(27, 94), Size = new Size(610, 48), ForeColor = Color.DimGray };
+            var explain = new Label { Text = L.T("登入自己的 Google 帳號並同意權限後，每日會把完整 PDF 與原始 CSV 上傳到 Drive / Net_Check / 電腦名稱。\n程式必須保持執行；錯過時間時，下次啟動會優先補傳最近一天。", "Sign in with your Google account and grant permission to upload the full PDF and raw CSV to Drive / Net_Check / computer name each day.\nThe program must remain running. If a backup is missed, the most recent day is uploaded first at the next start."), AutoSize = false, Location = new Point(27, 94), Size = new Size(610, 48), ForeColor = Color.DimGray };
             var scheduleLabel = new Label { Text = L.T("每日備份時間", "Daily Backup Time"), AutoSize = true, Location = new Point(28, 157) };
             timePicker.Format = DateTimePickerFormat.Custom; timePicker.CustomFormat = "HH:mm"; timePicker.ShowUpDown = true; timePicker.SetBounds(140, 152, 95, 28); timePicker.Value = DateTime.Today.Add(manager.ScheduleTime);
             var saveTime = new Button { Text = L.T("儲存時間", "Save Time"), Location = new Point(245, 151), Size = new Size(105, 32) };
