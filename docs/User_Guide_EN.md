@@ -1,6 +1,6 @@
 # NetCheckMonitor User Guide (English)
 
-Version: 0.9.11
+Version: 0.9.12
 
 NetCheckMonitor periodically tests public Internet connectivity, records outages, and produces graphical reports. It supports Google Drive backup and PDF downloads and is completely free, open source, and ad-free.
 
@@ -94,6 +94,8 @@ The app requests only the `drive.file` scope. Windows DPAPI encrypts the sign-in
 ## Output files and computer ID
 
 - Primary records are written to `NetCheck_Data` beside the program.
+- Gmail delivery and Google Drive backup outcomes are recorded in `NetCheck_Delivery_<computer>-<ID>.csv` with `SUCCESS`, `FAILED`, or `SKIPPED` status. Detail contains the action, data date, and a sanitized single-line error summary.
+- Delivery logs contain no OAuth tokens or message bodies and are included by **Export All Data Backup ZIP**.
 - If that location is not writable, the app uses `Documents\NetCheck_Data`.
 - Recovery copies are stored in `%LOCALAPPDATA%\NetCheck\Recovery`.
 - Filenames use `NetCheck_<computer>-<8-character ID>_<date and time>`.

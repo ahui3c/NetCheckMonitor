@@ -130,13 +130,13 @@ namespace NetCheck
 
         public void BeginBackup(DateTime day, Action<bool, string> completed)
         {
-            if (!Connected) { if (completed != null) completed(false, L.T("尚未連接 Google Drive。", "Google Drive is not connected.")); return; }
-            if (Interlocked.Exchange(ref backupRunning, 1) == 1) { if (completed != null) completed(false, L.T("已有雲端備份正在進行。", "A cloud backup is already in progress.")); return; }
+            if (!Connected) { DeliveryAuditLog.Record(machineName, machineId, "GOOGLE_DRIVE", "DAILY_BACKUP", "FAILED", "DataDate=" + day.ToString("yyyy-MM-dd") + ";Reason=NotConnected"); if (completed != null) completed(false, L.T("尚未連接 Google Drive。", "Google Drive is not connected.")); return; }
+            if (Interlocked.Exchange(ref backupRunning, 1) == 1) { DeliveryAuditLog.Record(machineName, machineId, "GOOGLE_DRIVE", "DAILY_BACKUP", "SKIPPED", "DataDate=" + day.ToString("yyyy-MM-dd") + ";Reason=AlreadyRunning"); if (completed != null) completed(false, L.T("已有雲端備份正在進行。", "A cloud backup is already in progress.")); return; }
             lock (sync) lastStatus = L.T("正在製作 ", "Creating and uploading the ") + day.ToString("yyyy/MM/dd") + L.T(" 報表並上傳…", " report…");
             ThreadPool.QueueUserWorkItem(delegate
             {
                 SetThreadExecutionState(ES_CONTINUOUS | ES_SYSTEM_REQUIRED);
-                bool ok = false; string message;
+                bool ok = false; string message; string auditDetail = "DataDate=" + day.ToString("yyyy-MM-dd");
                 string temp = Path.Combine(Path.GetTempPath(), "NetCheckCloud_" + Guid.NewGuid().ToString("N"));
                 try
                 {
@@ -146,12 +146,14 @@ namespace NetCheck
                     foreach (string artifact in artifacts) UploadOrReplace(token, folder, artifact, ArtifactContentType(artifact));
                     lock (sync) { config.LastBackupDay = day.ToString("yyyy-MM-dd"); SaveConfig(settingsPath, config); }
                     ok = true;
+                    auditDetail += ";Artifacts=" + artifacts.Length.ToString(CultureInfo.InvariantCulture) + ";Folder=Net_Check/" + SafeDriveFolderName(machineName);
                     message = day.ToString("yyyy/MM/dd") + (artifacts.Length > 2
                         ? L.T(" 網路監控與定時測速報表已備份到 Google Drive / Net_Check / ", " network-monitoring and scheduled speed-test reports were backed up to Google Drive / Net_Check / ")
                         : L.T(" PDF 與 CSV 已備份到 Google Drive / Net_Check / ", " PDF and CSV were backed up to Google Drive / Net_Check / ")) + SafeDriveFolderName(machineName) + L.T("。", ".");
                 }
-                catch (Exception ex) { message = L.T("雲端備份失敗：", "Cloud backup failed: ") + ex.Message; }
+                catch (Exception ex) { auditDetail += ";Error=" + ex.Message; message = L.T("雲端備份失敗：", "Cloud backup failed: ") + ex.Message; }
                 finally { try { if (Directory.Exists(temp)) Directory.Delete(temp, true); } catch { } SetThreadExecutionState(ES_CONTINUOUS); Interlocked.Exchange(ref backupRunning, 0); }
+                DeliveryAuditLog.Record(machineName, machineId, "GOOGLE_DRIVE", "DAILY_BACKUP", ok ? "SUCCESS" : "FAILED", auditDetail);
                 lock (sync) lastStatus = message;
                 if (completed != null) completed(ok, message);
             });
@@ -169,6 +171,7 @@ namespace NetCheck
                 if (!ArchiveReport.HasChecksForDay(due))
                 {
                     lock (sync) { config.LastBackupDay = due.ToString("yyyy-MM-dd"); lastStatus = due.ToString("yyyy/MM/dd") + L.T(" 沒有監控資料，已略過雲端備份。", " has no monitoring data; cloud backup was skipped."); SaveConfig(settingsPath, config); }
+                    DeliveryAuditLog.Record(machineName, machineId, "GOOGLE_DRIVE", "DAILY_BACKUP", "SKIPPED", "DataDate=" + due.ToString("yyyy-MM-dd") + ";Reason=NoMonitoringData");
                     return;
                 }
                 BeginBackup(due, null);
@@ -409,7 +412,7 @@ namespace NetCheck
 
         private static string ApiRequest(string method, string url, string token, string contentType, byte[] body)
         {
-            var request = (HttpWebRequest)WebRequest.Create(url); request.Method = method; request.Timeout = 60000; request.ReadWriteTimeout = 60000; request.UserAgent = "NetCheckMonitor/0.9.11"; request.Headers[HttpRequestHeader.Authorization] = "Bearer " + token;
+            var request = (HttpWebRequest)WebRequest.Create(url); request.Method = method; request.Timeout = 60000; request.ReadWriteTimeout = 60000; request.UserAgent = "NetCheckMonitor/0.9.12"; request.Headers[HttpRequestHeader.Authorization] = "Bearer " + token;
             if (body != null) { request.ContentType = contentType; request.ContentLength = body.Length; using (Stream stream = request.GetRequestStream()) stream.Write(body, 0, body.Length); }
             try { using (var response = (HttpWebResponse)request.GetResponse()) using (var reader = new StreamReader(response.GetResponseStream())) return reader.ReadToEnd(); }
             catch (WebException ex) { throw new InvalidOperationException(ReadWebError(ex)); }

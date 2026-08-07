@@ -1,7 +1,7 @@
 NetCheckMonitor Network Connection Monitor (Portable Windows Edition)
 ===================================================================
 
-Version 0.9.11
+Version 0.9.12
 
 Interface language
 - On first launch, choose Traditional Chinese or English. The choice is saved and the prompt is not shown again.
@@ -50,6 +50,8 @@ Monitoring target settings
 - Optional advanced layered diagnostics run only after an HTTPS failure and check the adapter, default gateway, DNS, IPv4, IPv6, HTTPS target, and Wi-Fi signal. Toggling this option while monitoring takes effect immediately without restarting the session.
 
 Reports
+- Gmail delivery and Google Drive backup outcomes are recorded in NetCheck_Delivery_<computer>-<ID>.csv with SUCCESS, FAILED, or SKIPPED status. Detail includes the action, data date, and a sanitized single-line error summary.
+- Delivery logs never contain OAuth tokens or message bodies and are included by Export All Data Backup ZIP.
 - CSV contains the raw check history.
 - HTML is an offline cumulative graphical report built from every saved CSV that has not been cleared.
 - PDF can include all saved data or a selected date range.
