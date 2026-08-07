@@ -159,10 +159,11 @@ namespace NetCheck
         {
             if (!Connected)
             {
+                DeliveryAuditLog.Record(machineName, machineId, "GMAIL", "TEST_EMAIL", "FAILED", "Reason=NotConnected");
                 if (completed != null) completed(false, L.T("請先登入 Gmail。", "Sign in to Gmail first."));
                 return;
             }
-            if (!TryBeginSend(completed)) return;
+            if (!TryBeginSend(completed)) { DeliveryAuditLog.Record(machineName, machineId, "GMAIL", "TEST_EMAIL", "SKIPPED", "Reason=AlreadyRunning"); return; }
             ThreadPool.QueueUserWorkItem(delegate
             {
                 bool ok = false;
@@ -179,6 +180,7 @@ namespace NetCheck
                     message = L.T("測試郵件已寄到 ", "A test email was sent to ") + email + "。";
                 }
                 catch (Exception ex) { message = L.T("測試郵件寄送失敗：", "Test email failed: ") + ex.Message; }
+                DeliveryAuditLog.Record(machineName, machineId, "GMAIL", "TEST_EMAIL", ok ? "SUCCESS" : "FAILED", ok ? "Recipient=SignedInAccount" : "Error=" + message);
                 CompleteSend(ok, message, completed);
             });
         }
@@ -248,6 +250,7 @@ namespace NetCheck
                     lastStatus = due.ToString("yyyy/MM/dd") + L.T(" 沒有監控資料，已略過每日郵件。", " had no monitoring data, so the daily email was skipped.");
                     SaveConfig(settingsPath, config);
                 }
+                DeliveryAuditLog.Record(machineName, machineId, "GMAIL", "DAILY_REPORT", "SKIPPED", "DataDate=" + due.ToString("yyyy-MM-dd") + ";Reason=NoMonitoringData");
                 return;
             }
             BeginDailyReportEmail(due);
@@ -260,6 +263,7 @@ namespace NetCheck
             {
                 bool ok = false;
                 string message;
+                string auditDetail = "OutageStart=" + pending.OutageStart.ToString("o", CultureInfo.InvariantCulture) + ";RecoveredAt=" + pending.RecoveredAt.ToString("o", CultureInfo.InvariantCulture);
                 try
                 {
                     TimeSpan duration = pending.RecoveredAt - pending.OutageStart;
@@ -286,7 +290,9 @@ namespace NetCheck
                         SaveConfig(settingsPath, config);
                     }
                     message = L.T("恢復通知暫時無法寄出，已保留稍後重試：", "The recovery notification could not be sent and is queued for retry: ") + ex.Message;
+                    auditDetail += ";Error=" + ex.Message;
                 }
+                DeliveryAuditLog.Record(machineName, machineId, "GMAIL", "RECOVERY_NOTIFICATION", ok ? "SUCCESS" : "FAILED", auditDetail);
                 CompleteSend(ok, message, null);
             });
         }
@@ -298,6 +304,7 @@ namespace NetCheck
             {
                 bool ok = false;
                 string message;
+                string auditDetail = "DataDate=" + day.ToString("yyyy-MM-dd");
                 string temp = Path.Combine(Path.GetTempPath(), "NetCheckGmail_" + Guid.NewGuid().ToString("N"));
                 try
                 {
@@ -316,6 +323,7 @@ namespace NetCheck
                         SaveConfig(settingsPath, config);
                     }
                     ok = true;
+                    auditDetail += ";Attachments=" + artifacts.Length.ToString(CultureInfo.InvariantCulture);
                     message = day.ToString("yyyy/MM/dd") + L.T(" 每日報表已寄到 ", " daily report was sent to ") + AccountEmail + "。";
                 }
                 catch (Exception ex)
@@ -327,8 +335,10 @@ namespace NetCheck
                         SaveConfig(settingsPath, config);
                     }
                     message = L.T("每日報表暫時無法寄出，稍後會自動重試：", "The daily report could not be sent and will be retried: ") + ex.Message;
+                    auditDetail += ";Error=" + ex.Message;
                 }
                 finally { try { if (Directory.Exists(temp)) Directory.Delete(temp, true); } catch { } }
+                DeliveryAuditLog.Record(machineName, machineId, "GMAIL", "DAILY_REPORT", ok ? "SUCCESS" : "FAILED", auditDetail);
                 CompleteSend(ok, message, null);
             });
         }
