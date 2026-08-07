@@ -6,15 +6,15 @@
 
 NetCheckMonitor is a free, open-source, ad-free Windows utility that periodically checks whether a computer can reach the public Internet. It records outages over hours or days and creates graphical HTML and PDF reports suitable for troubleshooting home Internet service or documenting connection problems for an ISP.
 
-Current version: **0.9.13**
+Current version: **0.9.14**
 
-## What's new in 0.9.13
+## What's new in 0.9.14
 
-- Adds one-click online update to download, verify, replace, and restart to the latest public release automatically.
-- Safely preserves active monitoring during the update and resumes it after launch, with backup and rollback protection.
-- Verifies the GitHub SHA-256 digest, update manifest, file hashes, executable version, and ZIP paths without modifying `NetCheck_Data`.
+- Resumes unfinished monitoring without confirmation when both Windows sign-in startup and automatic monitoring are enabled.
+- Shortens the Settings window, simplifies its guidance, and reorganizes the function buttons from four rows into three.
+- Moves Clear Data and Rebuild Daily Reports to compact maintenance buttons on the final row without changing their safeguards.
 
-See the complete [0.9.13 release notes](docs/RELEASE_NOTES_0.9.13.md).
+See the complete [0.9.14 release notes](docs/RELEASE_NOTES_0.9.14.md).
 
 ## Download
 
@@ -43,7 +43,7 @@ See the complete [0.9.13 release notes](docs/RELEASE_NOTES_0.9.13.md).
 - Downloads A4 landscape PDF reports for all saved data or a selected date range.
 - Reports include daily outage statistics, longest/average/shortest outages, 95th-percentile and maximum latency, average latency variation, and 24-hour timelines.
 - Active-session state is saved durably. After a crash or Windows restart, the original CSV can be resumed while time when the app was not running is marked and excluded.
-- Settings can independently launch NetCheckMonitor after Windows sign-in and start monitoring automatically when the app opens. An unfinished session is offered for recovery first.
+- Settings can independently launch NetCheckMonitor after Windows sign-in and start monitoring automatically when the app opens. When both are enabled and Windows launches the app at sign-in, an unfinished session resumes automatically without a confirmation dialog; manual launches still ask first.
 - Startup checks whether NetCheckMonitor is already running. A duplicate launch shows the existing window instead of creating a second monitoring process.
 - Performs scheduled daily Google Drive backups of the complete PDF and raw CSV to `Net_Check/computer name`, keeping multiple computers organized in one Drive.
 - Optionally signs in to Gmail to email the daily PDF and CSV report to that same signed-in account, send a recovery notice after a confirmed outage, and send a test message. Sender and recipient are fixed to the same account.
@@ -64,7 +64,7 @@ See the complete [0.9.13 release notes](docs/RELEASE_NOTES_0.9.13.md).
 2. Run `NetCheckMonitor.exe`.
 3. Open **Settings** to use custom targets or enable advanced layered diagnostics after failures.
 4. Confirm the check interval and select **Start Monitoring**. While active, the button is disabled to prevent accidental interruption of a long-running test.
-   If an unfinished session is found, the app first asks whether to resume it.
+   If Windows started the app at sign-in and both startup options are enabled, an unfinished session resumes automatically. A manual launch still asks whether to resume it.
 5. Select **Pause** for periods that should not be included in statistics, then **Resume** to continue.
 6. While monitoring, select **View Report** or download a PDF at any time without interrupting monitoring.
 7. You can view reports at any time while monitoring. To finish testing, use **Exit and Stop Monitoring** in the lower-right corner.
