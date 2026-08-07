@@ -1,6 +1,6 @@
 # NetCheckMonitor User Guide (English)
 
-Version: 0.9.13
+Version: 0.9.14
 
 NetCheckMonitor periodically tests public Internet connectivity, records outages, and produces graphical reports. It supports Google Drive backup and PDF downloads and is completely free, open source, and ad-free.
 
@@ -37,7 +37,7 @@ NetCheckMonitor periodically tests public Internet connectivity, records outages
 - You may enter `https://example.com/status`, `example.com`, or an IP such as `1.1.1.1`. Without a scheme, websites use HTTPS and IP addresses use HTTP.
 - Only HTTP and HTTPS are supported. Blank, malformed, credential-containing, or duplicate targets are rejected before saving.
 - Settings are stored in `NetCheckMonitor.settings.json` beside the executable for portability; previous AppData settings are migrated once automatically.
-- You can independently enable **Start the app after Windows sign-in** and **Start monitoring automatically when the app opens**. Recovery of an unfinished session is handled before a new automatic session starts.
+- You can independently enable **Start the app after Windows sign-in** and **Start monitoring automatically when the app opens**. When both are enabled and Windows launches the app at sign-in, an unfinished session resumes automatically without confirmation; manual launches still ask first.
 - Startup checks for an existing NetCheckMonitor instance. A duplicate launch shows the existing window instead of starting another monitoring process.
 - Settings remain available while monitoring. Target changes safely save the current session and report, then automatically start a new monitoring session. Changing only startup options does not interrupt the current session.
 - Sleep protection and Windows shutdown/restart protection are separate options. Sleep protection is enabled by default; shutdown protection is disabled by default. When shutdown protection is enabled, use **Exit and Stop Monitoring** before shutting down. Forced updates, power loss, and hardware resets can still interrupt the app.
@@ -64,7 +64,7 @@ NetCheckMonitor periodically tests public Internet connectivity, records outages
 ## Resume after a crash or restart
 
 - Active state is saved to `%LOCALAPPDATA%\NetCheck\Monitor\active-session.json` after checks, pauses, and resumes.
-- After an abnormal exit or Windows restart, the next launch asks whether to resume the original CSV.
+- After an abnormal exit or Windows restart, a manual launch asks whether to resume the original CSV. When both startup options are enabled and Windows launches the app at sign-in, it resumes automatically without confirmation.
 - Time when the app was not running is marked as interrupted and excluded from effective monitoring time and outage percentage.
 - A normal stop or safe exit removes the active-session state.
 

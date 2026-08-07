@@ -272,79 +272,81 @@ namespace NetCheck
             clearStoredData = clearStoredDataAction;
             Text = L.T("監控目標設定", "Monitoring Target Settings");
             Font = new Font("Microsoft JhengHei UI", 10F);
-            ClientSize = new Size(620, 780);
+            ClientSize = new Size(620, 700);
             FormBorderStyle = FormBorderStyle.FixedDialog;
             MaximizeBox = false;
             MinimizeBox = false;
             StartPosition = FormStartPosition.CenterParent;
 
             var title = new Label { Text = L.T("對外連線檢測目標", "Internet Connectivity Targets"), Font = new Font(Font.FontFamily, 17F, FontStyle.Bold), AutoSize = true, Location = new Point(24, 20) };
-            var intro = new Label { Text = L.T("選擇內建目標，或改用最多三組自訂網站／IP。監控中變更目標會安全保存並重新開始監控。", "Use the built-in targets or up to three custom websites/IP addresses. Target changes during monitoring safely save and restart the session."), AutoSize = false, Location = new Point(27, 62), Size = new Size(565, 48), ForeColor = Color.DimGray };
+            var intro = new Label { Text = L.T("選擇使用程式內建或是最多三組自訂目標，監控中變更設定會即時生效持續監控。", "Choose the built-in targets or up to three custom targets. Changes take effect immediately while monitoring continues."), AutoSize = false, Location = new Point(27, 62), Size = new Size(565, 28), ForeColor = Color.DimGray };
 
             builtInRadio.Text = L.T("使用內建測試目標（建議）", "Use built-in test targets (recommended)");
-            builtInRadio.SetBounds(28, 116, 300, 26);
-            var builtInInfo = new Label { Text = L.T("由程式自動使用預設目標進行連線測試。", "The app automatically uses its default connectivity targets."), AutoSize = false, Location = new Point(51, 146), Size = new Size(540, 24), ForeColor = Color.SlateGray, Font = new Font(Font.FontFamily, 8.5F) };
+            builtInRadio.SetBounds(28, 98, 300, 26);
+            var builtInInfo = new Label { Text = L.T("由程式自動使用預設目標進行連線測試。", "The app automatically uses its default connectivity targets."), AutoSize = false, Location = new Point(51, 128), Size = new Size(540, 24), ForeColor = Color.SlateGray, Font = new Font(Font.FontFamily, 8.5F) };
 
             customRadio.Text = L.T("使用自訂測試目標", "Use custom test targets");
-            customRadio.SetBounds(28, 174, 260, 26);
+            customRadio.SetBounds(28, 156, 260, 26);
             for (int i = 0; i < targetBoxes.Length; i++)
             {
-                var label = new Label { Text = L.T("目標 " + (i + 1), "Target " + (i + 1)), AutoSize = true, Location = new Point(51, 214 + i * 43) };
-                targetBoxes[i].SetBounds(120, 209 + i * 43, 465, 28);
+                var label = new Label { Text = L.T("目標 " + (i + 1), "Target " + (i + 1)), AutoSize = true, Location = new Point(51, 196 + i * 43) };
+                targetBoxes[i].SetBounds(120, 191 + i * 43, 465, 28);
                 Controls.Add(label);
                 Controls.Add(targetBoxes[i]);
             }
-            var hint = new Label { Text = L.T("依序測試，任一目標成功即判定本次連線正常。未填通訊協定時，網站使用 https://，IP 使用 http://。", "Targets are tried in order; the first success marks the check online. Without a scheme, websites use https:// and IPs use http://."), AutoSize = false, Location = new Point(51, 338), Size = new Size(535, 42), ForeColor = Color.DimGray, Font = new Font(Font.FontFamily, 8.5F) };
+            var hint = new Label { Text = L.T("設定的目標將依序測試，任一目標成功即判定連線正常。", "Configured targets are tested in order; any successful target marks the connection online."), AutoSize = false, Location = new Point(51, 313), Size = new Size(535, 24), ForeColor = Color.DimGray, Font = new Font(Font.FontFamily, 8.5F) };
 
             advancedDiagnosticsBox.Text = L.T("HTTPS 失敗時執行進階分層連線診斷（選用）", "Run advanced layered diagnostics after an HTTPS failure (optional)");
-            advancedDiagnosticsBox.SetBounds(51, 380, 535, 30);
+            advancedDiagnosticsBox.SetBounds(51, 342, 535, 30);
             preventSleepBox.Text = L.T("監控期間防止電腦進入休眠（建議）", "Prevent the computer from sleeping while monitoring (recommended)");
-            preventSleepBox.SetBounds(51, 412, 535, 26);
+            preventSleepBox.SetBounds(51, 374, 535, 26);
             preventShutdownBox.Text = L.T("監控期間阻止 Windows 關機或重新啟動（請使用程式內關閉按鈕）", "Block Windows shutdown or restart while monitoring (use the in-app exit button)");
-            preventShutdownBox.SetBounds(51, 439, 555, 26);
+            preventShutdownBox.SetBounds(51, 401, 555, 26);
             autoStartWindowsBox.Text = L.T("登入 Windows 後自動啟動程式", "Start the app after Windows sign-in");
-            autoStartWindowsBox.SetBounds(51, 471, 535, 26);
+            autoStartWindowsBox.SetBounds(51, 433, 535, 26);
             autoStartMonitoringBox.Text = L.T("程式啟動後自動開始監控", "Start monitoring automatically when the app opens");
-            autoStartMonitoringBox.SetBounds(51, 498, 535, 26);
+            autoStartMonitoringBox.SetBounds(51, 460, 535, 26);
 
-            var languageLabel = new Label { Text = L.T("介面語言", "Interface language"), AutoSize = true, Location = new Point(51, 536) };
+            var languageLabel = new Label { Text = L.T("介面語言", "Interface language"), AutoSize = true, Location = new Point(51, 498) };
             languageBox.DropDownStyle = ComboBoxStyle.DropDownList;
             languageBox.Items.Add("繁體中文");
             languageBox.Items.Add("English");
-            languageBox.SetBounds(155, 530, 160, 28);
+            languageBox.SetBounds(155, 492, 160, 28);
             languageBox.SelectedIndex = L.TraditionalChinese ? 0 : 1;
-            var languageHint = new Label { Text = L.T("下次啟動程式時套用", "Applied the next time the app starts"), AutoSize = false, Location = new Point(329, 536), Size = new Size(255, 25), ForeColor = Color.DimGray, Font = new Font(Font.FontFamily, 8.5F) };
+            var languageHint = new Label { Text = L.T("下次啟動程式時套用", "Applied the next time the app starts"), AutoSize = false, Location = new Point(329, 498), Size = new Size(255, 25), ForeColor = Color.DimGray, Font = new Font(Font.FontFamily, 8.5F) };
 
             exportBackupButton.Text = L.T("匯出全部紀錄備份 ZIP", "Export All Data Backup ZIP");
             speedSettingsButton.Text = L.T("定時測速設定（Beta）…", "Scheduled Speed Test Settings (Beta)…");
-            speedSettingsButton.SetBounds(51, 570, 534, 32);
+            speedSettingsButton.SetBounds(51, 528, 534, 32);
             speedSettingsButton.Click += delegate { EditSpeedSettings(); };
 
             cloudSettingsButton.Text = L.T("Google Drive 備份設定…", "Google Drive Backup Settings…");
-            cloudSettingsButton.SetBounds(51, 612, 260, 34);
+            cloudSettingsButton.SetBounds(51, 570, 260, 32);
             cloudSettingsButton.Enabled = showCloudSettings != null;
             cloudSettingsButton.Click += delegate { if (showCloudSettings != null) showCloudSettings(); };
             gmailSettingsButton.Text = L.T("Gmail 報表與通知設定…", "Gmail Report & Notification Settings…");
-            gmailSettingsButton.SetBounds(325, 612, 260, 34);
+            gmailSettingsButton.SetBounds(325, 570, 260, 32);
             gmailSettingsButton.Enabled = showGmailSettings != null;
             gmailSettingsButton.Click += delegate { if (showGmailSettings != null) showGmailSettings(); };
             clearDataButton.Text = L.T("清除全部儲存資料…", "Clear All Saved Data…");
-            clearDataButton.SetBounds(51, 654, 260, 34);
+            clearDataButton.SetBounds(309, 612, 132, 30);
+            clearDataButton.Font = new Font(Font.FontFamily, 8F);
             clearDataButton.ForeColor = Color.Firebrick;
             clearDataButton.Enabled = clearStoredData != null;
             clearDataButton.Click += delegate { if (clearStoredData != null) clearStoredData(); };
 
-            exportBackupButton.SetBounds(325, 654, 260, 34);
+            exportBackupButton.SetBounds(51, 612, 250, 30);
             exportBackupButton.Click += delegate { ExportBackupZip(); };
             rebuildDailyReportsButton.Text = L.T("強制重製每日詳細報表", "Rebuild Daily Detail Reports");
-            rebuildDailyReportsButton.SetBounds(51, 696, 534, 34);
+            rebuildDailyReportsButton.SetBounds(449, 612, 136, 30);
+            rebuildDailyReportsButton.Font = new Font(Font.FontFamily, 8F);
             rebuildDailyReportsButton.Enabled = rebuildDailyReports != null;
             rebuildDailyReportsButton.Click += delegate { RebuildDailyReports(); };
 
             saveButton.Text = L.T("儲存", "Save");
             cancelButton.Text = L.T("取消", "Cancel");
-            saveButton.SetBounds(352, 736, 110, 30);
-            cancelButton.SetBounds(475, 736, 110, 30);
+            saveButton.SetBounds(352, 657, 110, 30);
+            cancelButton.SetBounds(475, 657, 110, 30);
             cancelButton.DialogResult = DialogResult.Cancel;
             saveButton.Click += delegate { ValidateAndClose(); };
             builtInRadio.CheckedChanged += delegate { UpdateTargetState(); };

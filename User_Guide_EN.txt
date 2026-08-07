@@ -1,7 +1,7 @@
 NetCheckMonitor Network Connection Monitor (Portable Windows Edition)
 ===================================================================
 
-Version 0.9.13
+Version 0.9.14
 
 Interface language
 - On first launch, choose Traditional Chinese or English. The choice is saved and the prompt is not shown again.
@@ -84,7 +84,7 @@ Gmail daily reports and recovery notifications
 Data protection
 - Every result is immediately force-flushed to disk.
 - A recovery copy is stored in %LOCALAPPDATA%\NetCheck\Recovery.
-- Active state is saved to %LOCALAPPDATA%\NetCheck\Monitor\active-session.json. After a crash or Windows restart, the app asks whether to resume the original CSV.
+- Active state is saved to %LOCALAPPDATA%\NetCheck\Monitor\active-session.json. A manual launch asks whether to resume the original CSV. When both startup options are enabled and Windows launches the app at sign-in, the session resumes automatically without confirmation.
 - Time when the app was not running is marked and excluded. A normal stop removes the active-session state.
 - The X button or Alt+F4 minimizes the app to the system tray instead of exiting. The first use shows a one-time reminder to exit safely with the lower-right Exit and Stop Monitoring button.
 - The program prevents automatic Windows system sleep while monitoring, although the display may turn off.

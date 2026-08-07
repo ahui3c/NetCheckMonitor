@@ -18,8 +18,8 @@ using Microsoft.Win32;
 [assembly: AssemblyProduct("NetCheckMonitor")]
 [assembly: AssemblyDescription("Internet connection monitoring and outage reporting")]
 [assembly: AssemblyCompany("廖阿輝")]
-[assembly: AssemblyVersion("0.9.13.0")]
-[assembly: AssemblyFileVersion("0.9.13.0")]
+[assembly: AssemblyVersion("0.9.14.0")]
+[assembly: AssemblyFileVersion("0.9.14.0")]
 
 namespace NetCheck
 {
@@ -681,7 +681,7 @@ namespace NetCheck
                                 request.Method = "GET";
                                 request.Timeout = 5000;
                                 request.ReadWriteTimeout = 5000;
-                                request.UserAgent = "NetCheckMonitor/0.9.13";
+                                request.UserAgent = "NetCheckMonitor/0.9.14";
                                 request.AllowAutoRedirect = true;
                                 using (var response = (HttpWebResponse)request.GetResponse())
                                 {
@@ -813,8 +813,9 @@ namespace NetCheck
             try
             {
                 if (UpdateStartup.ResumeAfterUpdate && TryResumeAfterUpdate()) return;
-                if (TryOfferSessionResume() || running) return;
                 monitorSettings = MonitorSettingsStore.Load();
+                bool resumeWithoutPrompt = ApplicationStartup.ShouldResumeWithoutPrompt(monitorSettings);
+                if (TryOfferSessionResume(resumeWithoutPrompt) || running) return;
                 if (monitorSettings == null || !monitorSettings.AutoStartMonitoring) return;
                 try { StartMonitoring(); }
                 catch (Exception ex)
@@ -847,7 +848,7 @@ namespace NetCheck
             }
         }
 
-        private bool TryOfferSessionResume()
+        private bool TryOfferSessionResume(bool resumeWithoutPrompt)
         {
             if (running) return true;
             ActiveSessionState state = SessionStateStore.Load();
@@ -859,6 +860,16 @@ namespace NetCheck
                 return false;
             }
             if (SessionStateStore.IsOriginalProcessAlive(state)) return true;
+            if (resumeWithoutPrompt)
+            {
+                try { ResumeMonitoring(state); return true; }
+                catch (Exception ex)
+                {
+                    logWarning = L.T("無法自動接續上次監控，已改為建立新的監控工作（", "Could not automatically resume the previous session; a new monitoring session will be started (") + ex.Message + L.T("）", ")");
+                    SessionStateStore.Delete();
+                    return false;
+                }
+            }
             string message = L.T("發現上次未正常結束的監控工作。\n\n開始時間：", "An unfinished monitoring session was found.\n\nStarted: ")
                 + state.SessionStart.ToString("yyyy/MM/dd HH:mm:ss")
                 + L.T("\n最後保存：", "\nLast saved: ") + state.LastHeartbeat.ToString("yyyy/MM/dd HH:mm:ss")
@@ -1871,7 +1882,7 @@ namespace NetCheck
 
     internal sealed class AboutForm : Form
     {
-        internal const string AppVersion = "0.9.13";
+        internal const string AppVersion = "0.9.14";
         internal const string Purpose = "可定時監控對外網路連線，紀錄斷線並產生圖文報表，並支援網路硬碟備份，PDF 下載，程式完全免費開源無廣告。";
         internal const string EnglishPurpose = "Scheduled monitoring of external Internet connectivity, outage logging, graphical reports, cloud-drive backup, and PDF downloads. Completely free, open source, and ad-free.";
         private const string GitHubProjectUrl = "https://github.com/ahui3c/NetCheckMonitor";
@@ -1985,6 +1996,7 @@ namespace NetCheck
         [STAThread]
         private static void Main(string[] args)
         {
+            ApplicationStartup.Configure(args);
             UpdateStartup.Configure(args);
             Mutex instanceMutex;
             if (!SingleInstance.TryAcquire(out instanceMutex))

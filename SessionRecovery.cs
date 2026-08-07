@@ -142,10 +142,31 @@ namespace NetCheck
                 if (enabled)
                 {
                     string exe = Assembly.GetExecutingAssembly().Location;
-                    key.SetValue(ValueName, "\"" + exe + "\" --resume", RegistryValueKind.String);
+                    key.SetValue(ValueName, "\"" + exe + "\" --windows-autostart", RegistryValueKind.String);
                 }
                 else key.DeleteValue(ValueName, false);
             }
+        }
+    }
+
+    internal static class ApplicationStartup
+    {
+        internal static bool WindowsAutoStart { get; private set; }
+
+        internal static void Configure(string[] args)
+        {
+            WindowsAutoStart = false;
+            foreach (string argument in args ?? new string[0])
+                if (String.Equals(argument, "--windows-autostart", StringComparison.OrdinalIgnoreCase))
+                {
+                    WindowsAutoStart = true;
+                    break;
+                }
+        }
+
+        internal static bool ShouldResumeWithoutPrompt(MonitorTargetSettings settings)
+        {
+            return WindowsAutoStart && settings != null && settings.AutoStartWindows && settings.AutoStartMonitoring;
         }
     }
 
