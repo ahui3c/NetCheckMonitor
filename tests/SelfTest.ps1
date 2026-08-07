@@ -66,7 +66,7 @@ $aboutButtonLayout = $aboutButton.Text -eq '關於' -and $aboutButton.Width -le 
 $settingsButtonLayout = $settingsButton.Text -eq '設定' -and $settingsButton.Width -le 90 -and $settingsButton.Top -ge 495
 $pauseButton = $type.GetField('pauseButton', $flags).GetValue($form)
 $eventNoteButtonLayout = $eventNoteButton.Text -eq '事件註記' -and $eventNoteButton.Height -eq $pauseButton.Height -and $eventNoteButton.Top -eq $pauseButton.Top -and $eventNoteButton.Left -gt $pauseButton.Right -and ($eventNoteButton.Left - $pauseButton.Right) -le 12
-$homeVersionLabel = $versionLabel.Text -eq 'v0.9.14' -and $versionLabel.Font.Size -le 8.5 -and $versionLabel.ForeColor -eq [Drawing.Color]::DarkGray
+$homeVersionLabel = $versionLabel.Text -eq 'v0.9.15' -and $versionLabel.Font.Size -le 8.5 -and $versionLabel.ForeColor -eq [Drawing.Color]::DarkGray
 $monitorSettingsType = $assembly.GetType('NetCheck.MonitorSettingsStore', $true)
 $monitorSettingsStorageMethod = $monitorSettingsType.GetMethod('RunStorageSelfTest', [Reflection.BindingFlags]'Static,Public')
 $monitorSettingsStorage = $monitorSettingsStorageMethod.Invoke($null, [object[]]@($env:NETCHECK_MONITOR_SETTINGS))
@@ -81,7 +81,7 @@ $settingsFormType = $assembly.GetType('NetCheck.MonitorSettingsForm', $true)
 $builtInTargets = $type.GetField('TestUrls', $staticFlags).GetValue($null)
 $settingsForm = [Activator]::CreateInstance($settingsFormType, [object[]]@($monitorSettingsValue, [Action]{ }, [Action]{ }, [Action]{ }, [Action]{ }, [Action]{ }))
 $settingsFormText = @($settingsForm.Controls | ForEach-Object { $_.Text }) -join "`n"
-$settingsPageContent = $settingsForm.Text -eq '監控目標設定' -and $settingsFormText.Contains('選擇使用程式內建或是最多三組自訂目標，監控中變更設定會即時生效持續監控。') -and $settingsFormText.Contains('設定的目標將依序測試，任一目標成功即判定連線正常。') -and $settingsFormText.Contains('使用內建測試目標（建議）') -and $settingsFormText.Contains('使用自訂測試目標') -and $settingsFormText.Contains('目標 1') -and $settingsFormText.Contains('目標 2') -and $settingsFormText.Contains('目標 3') -and $settingsFormText.Contains('HTTPS 失敗時執行進階分層連線診斷（選用）') -and $settingsFormText.Contains('監控期間防止電腦進入休眠（建議）') -and $settingsFormText.Contains('監控期間阻止 Windows 關機或重新啟動（請使用程式內關閉按鈕）') -and $settingsFormText.Contains('登入 Windows 後自動啟動程式') -and $settingsFormText.Contains('程式啟動後自動開始監控') -and $settingsFormText.Contains('介面語言') -and $settingsFormText.Contains('下次啟動程式時套用') -and $settingsFormText.Contains('定時測速設定（Beta）…') -and $settingsFormText.Contains('Google Drive 備份設定…') -and $settingsFormText.Contains('Gmail 報表與通知設定…') -and $settingsFormText.Contains('清除全部儲存資料…') -and $settingsFormText.Contains('匯出全部紀錄備份 ZIP') -and $settingsFormText.Contains('強制重製每日詳細報表')
+$settingsPageContent = $settingsForm.Text -eq '監控目標設定' -and $settingsFormText.Contains('選擇使用程式內建或是最多三組自訂目標，監控中變更設定會即時生效持續監控。') -and $settingsFormText.Contains('設定的目標將依序測試，任一目標成功即判定連線正常。') -and $settingsFormText.Contains('使用內建測試目標（建議）') -and $settingsFormText.Contains('使用自訂測試目標') -and $settingsFormText.Contains('目標 1') -and $settingsFormText.Contains('目標 2') -and $settingsFormText.Contains('目標 3') -and $settingsFormText.Contains('HTTPS 失敗時執行進階分層連線診斷（選用）') -and $settingsFormText.Contains('監控期間防止電腦進入休眠（建議）') -and $settingsFormText.Contains('監控期間阻止 Windows 關機或重新啟動（請使用程式內關閉按鈕）') -and $settingsFormText.Contains('登入 Windows 後自動啟動程式') -and $settingsFormText.Contains('程式啟動後自動開始監控') -and $settingsFormText.Contains('介面語言') -and $settingsFormText.Contains('下次啟動程式時套用') -and $settingsFormText.Contains('定時測速設定（Beta）…') -and $settingsFormText.Contains('Google Drive 備份設定…') -and $settingsFormText.Contains('Gmail 報表與通知設定…') -and $settingsFormText.Contains('清除全部資料') -and $settingsFormText.Contains('匯出全部紀錄備份 ZIP') -and $settingsFormText.Contains('強制重製詳細報表')
 $settingsHidesBuiltInTargets = @($builtInTargets | Where-Object { $settingsFormText.Contains($_) }).Count -eq 0
 $settingsCustomRadio = $settingsFormType.GetField('customRadio', $flags).GetValue($settingsForm)
 $settingsSaveButton = $settingsFormType.GetField('saveButton', $flags).GetValue($settingsForm)
@@ -93,6 +93,7 @@ $settingsExportButton = $settingsFormType.GetField('exportBackupButton', $flags)
 $settingsRebuildButton = $settingsFormType.GetField('rebuildDailyReportsButton', $flags).GetValue($settingsForm)
 $settingsSpeedButton = $settingsFormType.GetField('speedSettingsButton', $flags).GetValue($settingsForm)
 $settingsManagementButtons = $settingsCloudButton.Enabled -and $settingsGmailButton.Enabled -and $settingsClearButton.Enabled -and $settingsClearButton.ForeColor -eq [Drawing.Color]::Firebrick
+$settingsMaintenanceButtonFonts = $settingsClearButton.Font.Size -eq $settingsForm.Font.Size -and $settingsRebuildButton.Font.Size -eq $settingsForm.Font.Size
 $settingsCompactLayout = $settingsForm.ClientSize.Height -le 700 -and $settingsCustomRadio.Top -le 160 -and ($settingsSaveButton.Bottom + 12) -le $settingsForm.ClientSize.Height -and
     $settingsSpeedButton.Top -lt $settingsCloudButton.Top -and $settingsCloudButton.Top -lt $settingsExportButton.Top -and
     $settingsClearButton.Top -eq $settingsExportButton.Top -and $settingsRebuildButton.Top -eq $settingsExportButton.Top -and
@@ -139,9 +140,9 @@ $aboutFormType = $assembly.GetType('NetCheck.AboutForm', $true)
 $aboutForm = [Activator]::CreateInstance($aboutFormType)
 $checkVersionButton = $aboutFormType.GetField('checkVersionButton', $flags).GetValue($aboutForm)
 $isNewerVersionMethod = $aboutFormType.GetMethod('IsNewerVersion', [Reflection.BindingFlags]'Static,NonPublic')
-$versionComparison = $isNewerVersionMethod.Invoke($null, @('v0.9.15')) -and -not $isNewerVersionMethod.Invoke($null, @('v0.9.14')) -and -not $isNewerVersionMethod.Invoke($null, @('v0.9.13'))
+$versionComparison = $isNewerVersionMethod.Invoke($null, @('v0.9.16')) -and -not $isNewerVersionMethod.Invoke($null, @('v0.9.15')) -and -not $isNewerVersionMethod.Invoke($null, @('v0.9.14'))
 $aboutText = @($aboutForm.Controls | ForEach-Object { $_.Text }) -join "`n"
-$aboutPageContent = $aboutForm.Text -eq '關於 NetCheckMonitor' -and $aboutText.Contains('NetCheckMonitor') -and $aboutText.Contains('版本 0.9.14') -and $aboutText.Contains('可定時監控對外網路連線，紀錄斷線並產生圖文報表，並支援網路硬碟備份，PDF 下載，程式完全免費開源無廣告。') -and $aboutText.Contains('廖阿輝') -and $aboutText.Contains('chehui@gmail.com') -and $aboutText.Contains('https://ahui3c.com') -and $aboutText.Contains('https://github.com/ahui3c/NetCheckMonitor') -and $checkVersionButton.Text -eq '線上更新'
+$aboutPageContent = $aboutForm.Text -eq '關於 NetCheckMonitor' -and $aboutText.Contains('NetCheckMonitor') -and $aboutText.Contains('版本 0.9.15') -and $aboutText.Contains('可定時監控對外網路連線，紀錄斷線並產生圖文報表，並支援網路硬碟備份，PDF 下載，程式完全免費開源無廣告。') -and $aboutText.Contains('廖阿輝') -and $aboutText.Contains('chehui@gmail.com') -and $aboutText.Contains('https://ahui3c.com') -and $aboutText.Contains('https://github.com/ahui3c/NetCheckMonitor') -and $checkVersionButton.Text -eq '線上更新'
 $aboutLabels = @($aboutForm.Controls | Where-Object { $_ -is [Windows.Forms.Label] })
 $aboutLinks = @($aboutForm.Controls | Where-Object { $_ -is [Windows.Forms.LinkLabel] })
 $aboutWebsiteLink = @($aboutLinks | Where-Object { $_.Text -eq 'https://ahui3c.com' })
@@ -150,7 +151,7 @@ $aboutUrlLinkScope = [bool]($aboutLabels | Where-Object { $_.Text -eq '網站：
     [bool]($aboutLabels | Where-Object { $_.Text -eq 'GitHub 專案：' }) -and
     $aboutWebsiteLink.Count -eq 1 -and $aboutWebsiteLink[0].LinkArea.Start -eq 0 -and $aboutWebsiteLink[0].LinkArea.Length -eq $aboutWebsiteLink[0].Text.Length -and
     $aboutGitHubLink.Count -eq 1 -and $aboutGitHubLink[0].LinkArea.Start -eq 0 -and $aboutGitHubLink[0].LinkArea.Length -eq $aboutGitHubLink[0].Text.Length
-$programIdentity = $form.Text -eq '對外網路連線能力監控程式' -and $assembly.GetName().Version.ToString() -eq '0.9.14.0'
+$programIdentity = $form.Text -eq '對外網路連線能力監控程式' -and $assembly.GetName().Version.ToString() -eq '0.9.15.0'
 $applicationRecoveryType = $assembly.GetType('NetCheck.ApplicationRecovery', $true)
 $applicationRestartRegistered = $null -ne $applicationRecoveryType.GetMethod('Register', [Reflection.BindingFlags]'Static,Public')
 $embeddedIcon = [Drawing.Icon]::ExtractAssociatedIcon((Join-Path $testRoot 'NetCheckMonitor.exe'))
@@ -406,6 +407,7 @@ $result = [PSCustomObject]@{
     ClearRemovedFromPdfDialog = $clearRemovedFromPdfDialog
     MainManagementButtonsRemoved = $mainManagementButtonsRemoved
     SettingsManagementButtons = $settingsManagementButtons
+    SettingsMaintenanceButtonFonts = $settingsMaintenanceButtonFonts
     StartButtonSinglePurpose = $startButtonSinglePurpose
     AboutButtonLayout = $aboutButtonLayout
     SettingsButtonLayout = $settingsButtonLayout
@@ -480,6 +482,8 @@ $eventNoteForm.Dispose()
 $aboutForm.Dispose()
 $form.Dispose()
 $result | Format-List
+
+if (-not $result.SettingsMaintenanceButtonFonts) { throw 'Settings maintenance button font test failed.' }
 
 if (-not $result.CsvCreated -or -not $result.HtmlCreated -or -not $result.LiveHtmlCreated -or -not $result.BackupCsvCreated -or
     -not $result.CloseWasBlocked -or -not $result.IdleCloseWasBlocked -or -not $result.CloseReminderText -or $result.CheckRows -lt 1 -or

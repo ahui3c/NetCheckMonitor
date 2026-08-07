@@ -20,6 +20,7 @@ namespace NetCheck
         public string ExtractDirectory;
         public string PackagePath;
         public string Digest;
+        public bool RequiresElevation;
     }
 
     internal sealed class UpdateCheckResult
@@ -82,7 +83,6 @@ namespace NetCheck
             if (asset.size <= 0 || asset.size > MaximumPackageBytes) throw new InvalidDataException(L.T("更新檔案大小不合理。", "The update package size is invalid."));
             if (String.IsNullOrWhiteSpace(asset.digest) || !asset.digest.StartsWith("sha256:", StringComparison.OrdinalIgnoreCase)) throw new InvalidDataException(L.T("Release 沒有提供 SHA-256 驗證值。", "The release does not provide a SHA-256 digest."));
 
-            EnsureInstallDirectoryWritable();
             CleanupOldUpdateDirectories();
             string updateRoot = Path.Combine(UpdateCacheRoot(), SafeTag(release.tag_name) + "-" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(updateRoot);
@@ -93,6 +93,7 @@ namespace NetCheck
             if (!String.Equals(expectedHash, actualHash, StringComparison.OrdinalIgnoreCase)) throw new InvalidDataException(L.T("更新 ZIP 的 SHA-256 驗證失敗。", "The update ZIP failed SHA-256 verification."));
 
             result.Package = ValidateDownloadedPackage(packagePath, asset.digest, release.tag_name, release.html_url, updateRoot);
+            result.Package.RequiresElevation = InstallDirectoryRequiresElevation();
             Record("VERIFY", "SUCCESS", "Version=" + result.Package.Version + ";Digest=" + result.Package.Digest);
             return result;
         }
@@ -245,13 +246,35 @@ namespace NetCheck
             if (!paths.Contains("NetCheckMonitor.exe") || !paths.Contains("NetCheckUpdater.exe")) throw new InvalidDataException("Update manifest does not contain required executables.");
         }
 
-        private static void EnsureInstallDirectoryWritable()
+        internal static bool InstallDirectoryRequiresElevation()
         {
             string directory = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
+            return !IsDirectoryWritable(directory);
+        }
+
+        internal static bool IsDirectoryWritable(string directory)
+        {
+            if (String.IsNullOrWhiteSpace(directory) || !Directory.Exists(directory)) return false;
             string test = Path.Combine(directory, ".netcheck-update-write-" + Guid.NewGuid().ToString("N") + ".tmp");
-            try { File.WriteAllText(test, "write-test", Encoding.ASCII); }
-            catch (Exception ex) { throw new UnauthorizedAccessException(L.T("目前程式資料夾無法寫入，不能自動更新：", "The application folder is not writable, so automatic update cannot continue: ") + ex.Message, ex); }
+            try
+            {
+                File.WriteAllText(test, "write-test", Encoding.ASCII);
+                File.Delete(test);
+                return true;
+            }
+            catch { return false; }
             finally { try { if (File.Exists(test)) File.Delete(test); } catch { } }
+        }
+
+        internal static ProcessStartInfo CreateUpdaterStartInfo(string updater, string arguments, string workingDirectory, bool requiresElevation)
+        {
+            var startInfo = new ProcessStartInfo(updater, arguments)
+            {
+                WorkingDirectory = workingDirectory,
+                UseShellExecute = requiresElevation
+            };
+            if (requiresElevation) startInfo.Verb = "runas";
+            return startInfo;
         }
 
         private static string UpdateCacheRoot() { return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "NetCheck", "Updates"); }

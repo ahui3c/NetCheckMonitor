@@ -1,7 +1,7 @@
 NetCheckMonitor Network Connection Monitor (Portable Windows Edition)
 ===================================================================
 
-Version 0.9.14
+Version 0.9.15
 
 Interface language
 - On first launch, choose Traditional Chinese or English. The choice is saved and the prompt is not shown again.
@@ -89,10 +89,11 @@ Data protection
 - The X button or Alt+F4 minimizes the app to the system tray instead of exiting. The first use shows a one-time reminder to exit safely with the lower-right Exit and Stop Monitoring button.
 - The program prevents automatic Windows system sleep while monitoring, although the display may turn off.
 - Do not unplug a USB drive containing the running program.
-- Only Clear All Saved Data in Settings resets future cumulative reports to an empty data set.
+- Only Clear All Data in Settings resets future cumulative reports to an empty data set.
 
 GitHub and update checks
 - The About page includes an Online Update button that downloads, verifies, replaces, and restarts to the latest public release automatically.
+- If the program is under a protected folder such as Program Files, Windows displays one UAC administrator-permission prompt after the update is verified. Approving it completes replacement and restart automatically.
 - Active monitoring is safely preserved and resumed after the update; the updater never modifies `NetCheck_Data`.
 - GitHub Releases is queried once only when the button is selected; there is no background polling.
 - Update outcomes are recorded in `NetCheck_Data\NetCheck_Update.csv`; the current version keeps running when download or verification fails.

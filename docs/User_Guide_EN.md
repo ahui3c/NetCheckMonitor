@@ -1,6 +1,6 @@
 # NetCheckMonitor User Guide (English)
 
-Version: 0.9.14
+Version: 0.9.15
 
 NetCheckMonitor periodically tests public Internet connectivity, records outages, and produces graphical reports. It supports Google Drive backup and PDF downloads and is completely free, open source, and ad-free.
 
@@ -113,7 +113,7 @@ The app requests only the `drive.file` scope. Windows DPAPI encrypts the sign-in
 
 ## Clear saved data
 
-**Clear All Saved Data** in Settings removes CSV, HTML, live-report, and recovery files managed by NetCheckMonitor. Only this action resets future cumulative reports to an empty data set. PDFs downloaded elsewhere are not removed. Clearing is blocked while monitoring or cloud backup is active.
+**Clear All Data** in Settings removes CSV, HTML, live-report, and recovery files managed by NetCheckMonitor. Only this action resets future cumulative reports to an empty data set. PDFs downloaded elsewhere are not removed. Clearing is blocked while monitoring or cloud backup is active.
 
 ## Daily outage percentage
 
@@ -124,6 +124,7 @@ Enabling or disabling advanced diagnostics changes only the layered evidence col
 ## GitHub and update checks
 
 - The About page includes an **Online Update** button that downloads, verifies, replaces, and restarts to the latest public release automatically.
+- If the program is under a protected folder such as `Program Files`, Windows displays one UAC administrator-permission prompt after the update is verified. Approving it completes replacement and restart automatically.
 - Active monitoring is safely preserved and resumed after the update; the updater never modifies `NetCheck_Data`.
 - GitHub Releases is queried once only when the user selects the button; there is no background polling.
 - Update outcomes are recorded in `NetCheck_Data\NetCheck_Update.csv`; the current version keeps running when download or verification fails.
