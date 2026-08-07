@@ -6,21 +6,22 @@
 
 NetCheckMonitor is a free, open-source, ad-free Windows utility that periodically checks whether a computer can reach the public Internet. It records outages over hours or days and creates graphical HTML and PDF reports suitable for troubleshooting home Internet service or documenting connection problems for an ISP.
 
-Current version: **0.9.12**
+Current version: **0.9.13**
 
-## What's new in 0.9.12
+## What's new in 0.9.13
 
-- Adds success, failure, and skipped audit records for Gmail notifications and Google Drive backups.
-- Delivery records capture the action, latency, date, attachments or folder, and a concise error summary, and are included in the full data-backup ZIP.
+- Adds one-click online update to download, verify, replace, and restart to the latest public release automatically.
+- Safely preserves active monitoring during the update and resumes it after launch, with backup and rollback protection.
+- Verifies the GitHub SHA-256 digest, update manifest, file hashes, executable version, and ZIP paths without modifying `NetCheck_Data`.
 
-See the complete [0.9.12 release notes](docs/RELEASE_NOTES_0.9.12.md).
+See the complete [0.9.13 release notes](docs/RELEASE_NOTES_0.9.13.md).
 
 ## Download
 
 - [Download the portable Windows package](dist/NetCheckMonitor-Portable.zip).
 - Extract it and run `NetCheckMonitor.exe`; no installation is required.
 - Requirements: Windows 10 or 11, .NET Framework 4.8, and Microsoft Edge for PDF generation.
-- The About page includes the GitHub project link and a manual update check. GitHub is queried only when requested, and the user decides whether to open the Releases page.
+- The About page includes one-click online update. It downloads, verifies, replaces, and restarts to the latest public release automatically.
 
 ## Features
 
@@ -107,7 +108,7 @@ Run this command in Windows PowerShell 5.1:
 powershell -ExecutionPolicy Bypass -File .\build.ps1
 ```
 
-The build uses the C# compiler included with Windows and does not require the .NET SDK. Output is written to `NetCheck-Portable\NetCheckMonitor.exe`.
+The build uses the C# compiler included with Windows and does not require the .NET SDK. `NetCheck-Portable` receives the app, updater, and update manifest. Run `package-release.ps1` to create a release ZIP containing every automatic-update component.
 
 ## Tests
 
