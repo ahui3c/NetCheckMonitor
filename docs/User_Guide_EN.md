@@ -1,6 +1,6 @@
 # NetCheckMonitor User Guide (English)
 
-Version: 0.9.12
+Version: 0.9.13
 
 NetCheckMonitor periodically tests public Internet connectivity, records outages, and produces graphical reports. It supports Google Drive backup and PDF downloads and is completely free, open source, and ad-free.
 
@@ -123,9 +123,10 @@ Enabling or disabling advanced diagnostics changes only the layered evidence col
 
 ## GitHub and update checks
 
-- The About page includes the GitHub project link and a **Check for Updates** button.
+- The About page includes an **Online Update** button that downloads, verifies, replaces, and restarts to the latest public release automatically.
+- Active monitoring is safely preserved and resumed after the update; the updater never modifies `NetCheck_Data`.
 - GitHub Releases is queried once only when the user selects the button; there is no background polling.
-- If an update is found, the app only asks whether to open the Releases page. Downloads and installation remain under the user's control.
+- Update outcomes are recorded in `NetCheck_Data\NetCheck_Update.csv`; the current version keeps running when download or verification fails.
 
 ## Requirements
 

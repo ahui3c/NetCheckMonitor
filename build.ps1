@@ -55,6 +55,7 @@ $sources = @(
     (Join-Path $root 'MonitorSettings.cs'),
     (Join-Path $root 'SessionRecovery.cs'),
     (Join-Path $root 'DeliveryAuditLog.cs'),
+    (Join-Path $root 'UpdateService.cs'),
     (Join-Path $root 'GmailNotification.cs'),
     (Join-Path $root 'NetCheck.cs'),
     (Join-Path $root 'DataReport.cs'),
@@ -75,7 +76,37 @@ if ($results.Errors.HasErrors) {
     throw "C# build failed:`n$($messages -join "`n")"
 }
 
+$updaterProvider = New-Object Microsoft.CSharp.CSharpCodeProvider
+$updaterParameters = New-Object System.CodeDom.Compiler.CompilerParameters
+foreach ($reference in @('System.dll', 'System.Core.dll', 'System.Web.Extensions.dll')) { [void]$updaterParameters.ReferencedAssemblies.Add($reference) }
+$updaterParameters.GenerateExecutable = $true
+$updaterParameters.GenerateInMemory = $false
+$updaterParameters.IncludeDebugInformation = $false
+$updaterParameters.OutputAssembly = Join-Path $outDir 'NetCheckUpdater.exe'
+$updaterParameters.CompilerOptions = '/target:winexe /optimize+ /codepage:65001'
+try { $updaterResults = $updaterProvider.CompileAssemblyFromFile($updaterParameters, (Join-Path $root 'Updater.cs')) }
+finally { $updaterProvider.Dispose() }
+if ($updaterResults.Errors.HasErrors) {
+    $messages = @($updaterResults.Errors | ForEach-Object { "$($_.FileName)($($_.Line),$($_.Column)): $($_.ErrorNumber): $($_.ErrorText)" })
+    throw "Updater build failed:`n$($messages -join "`n")"
+}
+
 Copy-Item -LiteralPath (Join-Path $root '使用說明.txt') -Destination $outDir -Force
 Copy-Item -LiteralPath (Join-Path $root 'User_Guide_EN.txt') -Destination $outDir -Force
+if ([String]::Equals($outputName, 'NetCheckMonitor.exe', [StringComparison]::OrdinalIgnoreCase)) {
+    $builtAssembly = [Reflection.AssemblyName]::GetAssemblyName((Join-Path $outDir $outputName))
+    $manifestFiles = @(
+        [ordered]@{ path = 'NetCheckMonitor.exe'; source = $outputName },
+        [ordered]@{ path = 'NetCheckUpdater.exe'; source = 'NetCheckUpdater.exe' },
+        [ordered]@{ path = '使用說明.txt'; source = '使用說明.txt' },
+        [ordered]@{ path = 'User_Guide_EN.txt'; source = 'User_Guide_EN.txt' }
+    )
+    $manifest = [ordered]@{
+        schema = 1
+        version = "$($builtAssembly.Version.Major).$($builtAssembly.Version.Minor).$($builtAssembly.Version.Build)"
+        files = @($manifestFiles | ForEach-Object { [ordered]@{ path = $_.path; sha256 = (Get-FileHash -LiteralPath (Join-Path $outDir $_.source) -Algorithm SHA256).Hash.ToLowerInvariant() } })
+    }
+    $manifest | ConvertTo-Json -Depth 5 -Compress | Set-Content -LiteralPath (Join-Path $outDir 'update-manifest.json') -Encoding UTF8
+}
 Write-Host "Build complete: $outDir\$outputName"
 if ([String]::IsNullOrWhiteSpace($clientSecret)) { Write-Warning 'Google Drive OAuth is not configured in this build.' }

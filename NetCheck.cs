@@ -18,8 +18,8 @@ using Microsoft.Win32;
 [assembly: AssemblyProduct("NetCheckMonitor")]
 [assembly: AssemblyDescription("Internet connection monitoring and outage reporting")]
 [assembly: AssemblyCompany("廖阿輝")]
-[assembly: AssemblyVersion("0.9.12.0")]
-[assembly: AssemblyFileVersion("0.9.12.0")]
+[assembly: AssemblyVersion("0.9.13.0")]
+[assembly: AssemblyFileVersion("0.9.13.0")]
 
 namespace NetCheck
 {
@@ -147,6 +147,10 @@ namespace NetCheck
         private bool shutdownBlockReasonActive;
         private int speedTestRunning;
         private SpeedTestCancellation speedCancellation;
+        private System.Windows.Forms.Timer updateWaitTimer;
+        private UpdatePackage pendingUpdate;
+        private DateTime updateWaitDeadline;
+        private bool updateWasMonitoring;
         private readonly List<CheckRecord> records = new List<CheckRecord>();
         private readonly List<TimePeriod> pauses = new List<TimePeriod>();
         private readonly List<EventNote> eventNotes = new List<EventNote>();
@@ -261,7 +265,7 @@ namespace NetCheck
             reportButton.Click += delegate { if (running) CreateLiveReport(true); else OpenReport(); };
             dataButton.Click += delegate { ShowDataManager(); };
             exitButton.Click += delegate { RequestExit(); };
-            aboutButton.Click += delegate { using (var form = new AboutForm()) form.ShowDialog(this); };
+            aboutButton.Click += delegate { using (var form = new AboutForm(BeginOnlineUpdate)) form.ShowDialog(this); };
             settingsButton.Click += delegate { ShowMonitorSettings(); };
             eventNoteButton.Click += delegate { ShowEventNoteDialog(); };
             FormClosing += OnFormClosing;
@@ -677,7 +681,7 @@ namespace NetCheck
                                 request.Method = "GET";
                                 request.Timeout = 5000;
                                 request.ReadWriteTimeout = 5000;
-                                request.UserAgent = "NetCheckMonitor/0.9.12";
+                                request.UserAgent = "NetCheckMonitor/0.9.13";
                                 request.AllowAutoRedirect = true;
                                 using (var response = (HttpWebResponse)request.GetResponse())
                                 {
@@ -806,13 +810,40 @@ namespace NetCheck
 
         private void HandleStartupMonitoring()
         {
-            if (TryOfferSessionResume() || running) return;
-            monitorSettings = MonitorSettingsStore.Load();
-            if (monitorSettings == null || !monitorSettings.AutoStartMonitoring) return;
-            try { StartMonitoring(); }
+            try
+            {
+                if (UpdateStartup.ResumeAfterUpdate && TryResumeAfterUpdate()) return;
+                if (TryOfferSessionResume() || running) return;
+                monitorSettings = MonitorSettingsStore.Load();
+                if (monitorSettings == null || !monitorSettings.AutoStartMonitoring) return;
+                try { StartMonitoring(); }
+                catch (Exception ex)
+                {
+                    MessageBox.Show(L.T("無法自動開始監控：", "Could not start monitoring automatically: ") + ex.Message, "NetCheckMonitor", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
+            }
+            finally { UpdateStartup.SignalHealthy(); }
+        }
+
+        private bool TryResumeAfterUpdate()
+        {
+            ActiveSessionState state = SessionStateStore.Load();
+            if (state == null) return false;
+            EnsureMachineIdentity();
+            if (!String.Equals(state.MachineId, machineId, StringComparison.OrdinalIgnoreCase) || !File.Exists(state.CsvPath) || SessionStateStore.IsOriginalProcessAlive(state)) return false;
+            try
+            {
+                ResumeMonitoring(state);
+                WriteMarker("UPDATE_RESUMED", L.T("程式更新完成並自動接續監控", "Application update completed and monitoring resumed automatically"));
+                PersistSessionState();
+                UpdateService.Record("RELAUNCH", "SUCCESS", "Version=" + AboutForm.AppVersion + ";MonitoringResumed=1");
+                return true;
+            }
             catch (Exception ex)
             {
-                MessageBox.Show(L.T("無法自動開始監控：", "Could not start monitoring automatically: ") + ex.Message, "NetCheckMonitor", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                UpdateService.Record("RELAUNCH", "FAILED", ex.Message);
+                MessageBox.Show(L.T("更新完成，但無法自動接續原本的監控：", "The update completed, but the previous monitoring session could not be resumed automatically: ") + ex.Message, "NetCheckMonitor", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return true;
             }
         }
 
@@ -1065,6 +1096,103 @@ namespace NetCheck
             CloseWriter(ref backupWriter);
             UpdatePowerProtection();
         }
+
+        private void BeginOnlineUpdate(UpdatePackage package)
+        {
+            if (package == null || pendingUpdate != null) return;
+            pendingUpdate = package;
+            updateWasMonitoring = running;
+            updateWaitDeadline = DateTime.UtcNow.AddMinutes(5);
+            aboutButton.Enabled = false;
+            settingsButton.Enabled = false;
+            stateLabel.Text = L.T("更新已下載，正在等待背景工作安全結束…", "Update downloaded; waiting for background work to finish safely…");
+            stateLabel.ForeColor = Color.DarkOrange;
+            if (Volatile.Read(ref speedTestRunning) == 1) CancelSpeedTest();
+            updateWaitTimer = new System.Windows.Forms.Timer { Interval = 500 };
+            updateWaitTimer.Tick += delegate { TryLaunchPreparedUpdate(); };
+            updateWaitTimer.Start();
+            TryLaunchPreparedUpdate();
+        }
+
+        private void TryLaunchPreparedUpdate()
+        {
+            if (pendingUpdate == null) return;
+            bool busy = Volatile.Read(ref checking) != 0 || Volatile.Read(ref speedTestRunning) != 0
+                || (cloudManager != null && cloudManager.BackupInProgress)
+                || (gmailManager != null && gmailManager.SendInProgress);
+            if (busy)
+            {
+                if (DateTime.UtcNow <= updateWaitDeadline) return;
+                AbortPreparedUpdate(L.T("背景工作在五分鐘內未完成，已取消本次更新；目前版本會繼續執行。", "Background work did not finish within five minutes. This update was cancelled and the current version will continue running."));
+                return;
+            }
+
+            if (updateWaitTimer != null) { updateWaitTimer.Stop(); updateWaitTimer.Dispose(); updateWaitTimer = null; }
+            UpdatePackage package = pendingUpdate;
+            pendingUpdate = null;
+            ActiveSessionState resumeState = null;
+            try
+            {
+                if (running)
+                {
+                    PrepareForApplicationUpdate(package.Version);
+                    resumeState = SessionStateStore.Load();
+                }
+                string updater = Path.Combine(package.ExtractDirectory, "NetCheckUpdater.exe");
+                string health = Path.Combine(package.UpdateRoot, "startup-health.txt");
+                string installDirectory = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
+                Process current = Process.GetCurrentProcess();
+                string arguments = "--source " + QuoteArgument(package.ExtractDirectory)
+                    + " --target " + QuoteArgument(installDirectory)
+                    + " --main " + QuoteArgument(Path.GetFileName(Assembly.GetExecutingAssembly().Location))
+                    + " --version " + QuoteArgument(package.Version)
+                    + " --wait-pid " + current.Id.ToString(CultureInfo.InvariantCulture)
+                    + " --wait-start " + current.StartTime.ToUniversalTime().Ticks.ToString(CultureInfo.InvariantCulture)
+                    + " --health " + QuoteArgument(health)
+                    + " --log " + QuoteArgument(UpdateService.UpdateLogPath())
+                    + " --manifest-digest " + QuoteArgument(UpdateService.Sha256(Path.Combine(package.ExtractDirectory, UpdateService.ManifestName)))
+                    + " --resume " + (updateWasMonitoring ? "1" : "0");
+                Process launched = Process.Start(new ProcessStartInfo(updater, arguments) { UseShellExecute = false, WorkingDirectory = package.ExtractDirectory });
+                if (launched == null) throw new InvalidOperationException(L.T("無法啟動更新器。", "The updater could not be started."));
+                UpdateService.Record("INSTALL", "STARTED", "Version=" + package.Version + ";UpdaterPid=" + launched.Id);
+                allowExit = true;
+                Close();
+            }
+            catch (Exception ex)
+            {
+                UpdateService.Record("INSTALL", "FAILED", ex.Message);
+                if (updateWasMonitoring && !running && resumeState != null)
+                    try { ResumeMonitoring(resumeState); } catch { }
+                AbortPreparedUpdate(L.T("無法啟動自動更新：", "Could not start automatic update: ") + ex.Message);
+            }
+        }
+
+        private void PrepareForApplicationUpdate(string version)
+        {
+            if (!running) return;
+            WriteMarker("APPLICATION_UPDATE", L.T("準備更新至版本 ", "Preparing to update to version ") + version);
+            PersistSessionState();
+            running = false;
+            if (timer != null) { timer.Dispose(); timer = null; }
+            if (speedScheduleTimer != null) { speedScheduleTimer.Dispose(); speedScheduleTimer = null; }
+            if (speedCancellation != null) speedCancellation.Cancel();
+            CloseWriter(ref writer);
+            CloseWriter(ref backupWriter);
+            UpdatePowerProtection();
+        }
+
+        private void AbortPreparedUpdate(string message)
+        {
+            if (updateWaitTimer != null) { updateWaitTimer.Stop(); updateWaitTimer.Dispose(); updateWaitTimer = null; }
+            pendingUpdate = null;
+            aboutButton.Enabled = true;
+            settingsButton.Enabled = true;
+            UpdateService.Record("INSTALL", "FAILED", message);
+            UpdateState(running ? L.T("監控中", "Monitoring") : L.T("尚未開始", "Not started"), running ? Color.SeaGreen : Color.DimGray);
+            MessageBox.Show(message, L.T("自動更新失敗", "Automatic Update Failed"), MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+
+        private static string QuoteArgument(string value) { return "\"" + (value ?? "").Replace("\"", "\\\"") + "\""; }
 
         private void RequestExit()
         {
@@ -1730,6 +1858,7 @@ namespace NetCheck
             else if (running) StopMonitoring(false);
             if (cloudManager != null) cloudManager.Dispose();
             if (gmailManager != null) gmailManager.Dispose();
+            if (updateWaitTimer != null) { updateWaitTimer.Stop(); updateWaitTimer.Dispose(); updateWaitTimer = null; }
             ReleaseShutdownBlockReason();
             trayIcon.Visible = false;
             trayIcon.Dispose();
@@ -1742,16 +1871,19 @@ namespace NetCheck
 
     internal sealed class AboutForm : Form
     {
-        internal const string AppVersion = "0.9.12";
+        internal const string AppVersion = "0.9.13";
         internal const string Purpose = "可定時監控對外網路連線，紀錄斷線並產生圖文報表，並支援網路硬碟備份，PDF 下載，程式完全免費開源無廣告。";
         internal const string EnglishPurpose = "Scheduled monitoring of external Internet connectivity, outage logging, graphical reports, cloud-drive backup, and PDF downloads. Completely free, open source, and ad-free.";
         private const string GitHubProjectUrl = "https://github.com/ahui3c/NetCheckMonitor";
-        private const string LatestReleaseApiUrl = "https://api.github.com/repos/ahui3c/NetCheckMonitor/releases/latest";
         private readonly Button checkVersionButton = new Button();
         private readonly Label versionStatusLabel = new Label();
+        private readonly Action<UpdatePackage> installUpdate;
 
-        public AboutForm()
+        public AboutForm() : this(null) { }
+
+        internal AboutForm(Action<UpdatePackage> installUpdateCallback)
         {
+            installUpdate = installUpdateCallback;
             Text = L.T("關於 NetCheckMonitor", "About NetCheckMonitor");
             Font = new Font("Microsoft JhengHei UI", 10F);
             ClientSize = new Size(540, 355);
@@ -1770,11 +1902,11 @@ namespace NetCheck
             var website = new LinkLabel { Text = "https://ahui3c.com", AutoSize = true, Location = new Point(92, 218), LinkArea = new LinkArea(0, "https://ahui3c.com".Length) };
             var githubTitle = new Label { Text = L.T("GitHub 專案：", "GitHub project:"), AutoSize = true, Location = new Point(29, 245) };
             var github = new LinkLabel { Text = GitHubProjectUrl, AutoSize = true, Location = new Point(137, 245), LinkArea = new LinkArea(0, GitHubProjectUrl.Length) };
-            versionStatusLabel.Text = L.T("按下按鈕時才會連線至 GitHub 檢查。", "GitHub is contacted only when you select the button.");
+            versionStatusLabel.Text = L.T("按下按鈕後會檢查、下載並自動安裝正式公開版本。", "Select the button to check, download, and install the latest public release automatically.");
             versionStatusLabel.AutoEllipsis = true;
             versionStatusLabel.ForeColor = Color.DimGray;
             versionStatusLabel.SetBounds(29, 276, 485, 22);
-            checkVersionButton.Text = L.T("檢查新版本", "Check for Updates");
+            checkVersionButton.Text = L.T("線上更新", "Online Update");
             checkVersionButton.SetBounds(29, 307, 145, 34);
             var close = new Button { Text = L.T("關閉", "Close"), Location = new Point(394, 307), Size = new Size(120, 34) };
 
@@ -1792,12 +1924,16 @@ namespace NetCheck
             versionStatusLabel.Text = L.T("正在向 GitHub 檢查最新版本…", "Checking the latest GitHub release…");
             ThreadPool.QueueUserWorkItem(delegate
             {
-                string latestTag = null, releaseUrl = null, error = null;
+                UpdateCheckResult result = null;
+                string error = null;
                 try
                 {
-                    ReadLatestRelease(out latestTag, out releaseUrl);
+                    result = UpdateService.CheckAndPrepare(AppVersion, delegate(int progress)
+                    {
+                        if (!IsDisposed && IsHandleCreated) BeginInvoke((MethodInvoker)delegate { versionStatusLabel.Text = L.T("正在下載更新… ", "Downloading update… ") + progress + "%"; });
+                    });
                 }
-                catch (Exception ex) { error = ex.Message; }
+                catch (Exception ex) { error = ex.Message; UpdateService.Record("CHECK", "FAILED", ex.Message); }
 
                 if (!IsDisposed && IsHandleCreated) BeginInvoke((MethodInvoker)delegate
                 {
@@ -1805,21 +1941,27 @@ namespace NetCheck
                     if (error != null)
                     {
                         versionStatusLabel.Text = L.T("檢查失敗：", "Update check failed: ") + error;
-                        MessageBox.Show(versionStatusLabel.Text, L.T("檢查新版本", "Check for Updates"), MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        MessageBox.Show(versionStatusLabel.Text, L.T("線上更新", "Online Update"), MessageBoxButtons.OK, MessageBoxIcon.Warning);
                         return;
                     }
-                    if (IsNewerVersion(latestTag))
+                    if (result != null && result.IsNewer && result.Package != null)
                     {
-                        versionStatusLabel.Text = L.T("發現新版本：", "New version available: ") + latestTag;
-                        string message = L.T("GitHub 上有新版本 ", "A newer version is available on GitHub: ") + latestTag
-                            + L.T("。\n\n是否開啟 Releases 頁面？程式不會自動下載或安裝。", "\n\nOpen the Releases page? The app will not download or install anything automatically.");
-                        if (MessageBox.Show(message, L.T("發現新版本", "Update Available"), MessageBoxButtons.YesNo, MessageBoxIcon.Information) == DialogResult.Yes)
-                            Process.Start(new ProcessStartInfo(String.IsNullOrWhiteSpace(releaseUrl) ? GitHubProjectUrl + "/releases" : releaseUrl) { UseShellExecute = true });
+                        versionStatusLabel.Text = L.T("更新已驗證，正在準備自動安裝：", "Update verified; preparing automatic installation: ") + result.LatestTag;
+                        UpdateService.Record("CHECK", "SUCCESS", "Current=" + AppVersion + ";Latest=" + result.LatestTag);
+                        if (installUpdate == null)
+                        {
+                            MessageBox.Show(L.T("更新已下載並驗證，但目前視窗沒有安裝控制權。", "The update was downloaded and verified, but this window cannot start installation."), L.T("線上更新", "Online Update"), MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                            return;
+                        }
+                        UpdatePackage package = result.Package;
+                        Close();
+                        installUpdate(package);
                     }
                     else
                     {
                         versionStatusLabel.Text = L.T("目前已是最新版本（", "You are using the latest version (") + AppVersion + L.T("）", ")");
-                        MessageBox.Show(versionStatusLabel.Text, L.T("檢查新版本", "Check for Updates"), MessageBoxButtons.OK, MessageBoxIcon.Information);
+                        UpdateService.Record("CHECK", "SUCCESS", "Current=" + AppVersion + ";Latest=" + (result == null ? "unknown" : result.LatestTag) + ";Update=0");
+                        MessageBox.Show(versionStatusLabel.Text, L.T("線上更新", "Online Update"), MessageBoxButtons.OK, MessageBoxIcon.Information);
                     }
                 });
             });
@@ -1827,43 +1969,23 @@ namespace NetCheck
 
         private static void ReadLatestRelease(out string latestTag, out string releaseUrl)
         {
-            latestTag = null;
-            releaseUrl = null;
-            ServicePointManager.SecurityProtocol |= (SecurityProtocolType)3072;
-            var request = (HttpWebRequest)WebRequest.Create(LatestReleaseApiUrl);
-            request.Method = "GET";
-            request.UserAgent = "NetCheckMonitor/" + AppVersion;
-            request.Accept = "application/vnd.github+json";
-            request.Timeout = 8000;
-            request.ReadWriteTimeout = 8000;
-            request.AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate;
-            using (var response = (HttpWebResponse)request.GetResponse())
-            using (var reader = new StreamReader(response.GetResponseStream(), Encoding.UTF8))
-            {
-                var data = new System.Web.Script.Serialization.JavaScriptSerializer().Deserialize<Dictionary<string, object>>(reader.ReadToEnd());
-                object value;
-                if (data.TryGetValue("tag_name", out value)) latestTag = Convert.ToString(value);
-                if (data.TryGetValue("html_url", out value)) releaseUrl = Convert.ToString(value);
-            }
-            if (String.IsNullOrWhiteSpace(latestTag)) throw new InvalidDataException(L.T("GitHub 回傳資料中沒有版本號。", "The GitHub response did not contain a version tag."));
+            GitHubReleaseInfo release = UpdateService.ReadLatestReleaseInfo();
+            latestTag = release.tag_name;
+            releaseUrl = release.html_url;
         }
 
         private static bool IsNewerVersion(string tag)
         {
-            string value = (tag ?? "").Trim();
-            if (value.StartsWith("v", StringComparison.OrdinalIgnoreCase)) value = value.Substring(1);
-            int suffix = value.IndexOf('-');
-            if (suffix >= 0) value = value.Substring(0, suffix);
-            Version latest, current;
-            return Version.TryParse(value, out latest) && Version.TryParse(AppVersion, out current) && latest > current;
+            return UpdateService.IsNewerVersion(tag, AppVersion);
         }
     }
 
     internal static class Program
     {
         [STAThread]
-        private static void Main()
+        private static void Main(string[] args)
         {
+            UpdateStartup.Configure(args);
             Mutex instanceMutex;
             if (!SingleInstance.TryAcquire(out instanceMutex))
             {
