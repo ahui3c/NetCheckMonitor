@@ -18,8 +18,8 @@ using Microsoft.Win32;
 [assembly: AssemblyProduct("NetCheckMonitor")]
 [assembly: AssemblyDescription("Internet connection monitoring and outage reporting")]
 [assembly: AssemblyCompany("廖阿輝")]
-[assembly: AssemblyVersion("0.9.14.0")]
-[assembly: AssemblyFileVersion("0.9.14.0")]
+[assembly: AssemblyVersion("0.9.15.0")]
+[assembly: AssemblyFileVersion("0.9.15.0")]
 
 namespace NetCheck
 {
@@ -496,7 +496,7 @@ namespace NetCheck
                 MessageBox.Show(L.T("目前正在監控或雲端備份，不能清除資料。請等待工作完成；若正在監控，請使用「關閉程式並停止監控」，重新開啟後再清除。", "Saved data cannot be cleared while monitoring or a cloud backup is in progress. Wait for the work to finish; if monitoring is active, use Exit and Stop Monitoring, reopen the app, and then clear the data."), L.T("無法清除", "Unable to Clear"), MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
-            if (MessageBox.Show(L.T("這會刪除 NetCheck 管理的所有 CSV、HTML、即時報表與本機備援資料。\n\n自行下載到其他資料夾的 PDF 不會被刪除。此動作無法復原，確定繼續嗎？", "This will delete all CSV, HTML, live-report, and local recovery files managed by NetCheck.\n\nPDF files downloaded to other folders will not be deleted. This cannot be undone. Continue?"), L.T("清除全部儲存資料", "Clear All Saved Data"), MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes) return;
+            if (MessageBox.Show(L.T("這會刪除 NetCheck 管理的所有 CSV、HTML、即時報表與本機備援資料。\n\n自行下載到其他資料夾的 PDF 不會被刪除。此動作無法復原，確定繼續嗎？", "This will delete all CSV, HTML, live-report, and local recovery files managed by NetCheck.\n\nPDF files downloaded to other folders will not be deleted. This cannot be undone. Continue?"), L.T("清除全部資料", "Clear All Data"), MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes) return;
             int deleted;
             List<string> failures = ArchiveReport.ClearAllData(out deleted);
             if (failures.Count == 0) SessionStateStore.Delete();
@@ -681,7 +681,7 @@ namespace NetCheck
                                 request.Method = "GET";
                                 request.Timeout = 5000;
                                 request.ReadWriteTimeout = 5000;
-                                request.UserAgent = "NetCheckMonitor/0.9.14";
+                                request.UserAgent = "NetCheckMonitor/0.9.15";
                                 request.AllowAutoRedirect = true;
                                 using (var response = (HttpWebResponse)request.GetResponse())
                                 {
@@ -1149,9 +1149,17 @@ namespace NetCheck
                     PrepareForApplicationUpdate(package.Version);
                     resumeState = SessionStateStore.Load();
                 }
-                string updater = Path.Combine(package.ExtractDirectory, "NetCheckUpdater.exe");
                 string health = Path.Combine(package.UpdateRoot, "startup-health.txt");
                 string installDirectory = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
+                bool requiresElevation = package.RequiresElevation || UpdateService.InstallDirectoryRequiresElevation();
+                string updater = requiresElevation
+                    ? Path.Combine(installDirectory, "NetCheckUpdater.exe")
+                    : Path.Combine(package.ExtractDirectory, "NetCheckUpdater.exe");
+                if (!File.Exists(updater)) throw new FileNotFoundException(
+                    requiresElevation
+                        ? L.T("受保護的程式目錄中找不到可信任的更新器，無法安全要求系統管理員權限。", "The trusted updater is missing from the protected application folder, so administrator permission cannot be requested safely.")
+                        : L.T("更新套件中找不到更新器。", "The updater is missing from the update package."),
+                    updater);
                 Process current = Process.GetCurrentProcess();
                 string arguments = "--source " + QuoteArgument(package.ExtractDirectory)
                     + " --target " + QuoteArgument(installDirectory)
@@ -1163,18 +1171,23 @@ namespace NetCheck
                     + " --log " + QuoteArgument(UpdateService.UpdateLogPath())
                     + " --manifest-digest " + QuoteArgument(UpdateService.Sha256(Path.Combine(package.ExtractDirectory, UpdateService.ManifestName)))
                     + " --resume " + (updateWasMonitoring ? "1" : "0");
-                Process launched = Process.Start(new ProcessStartInfo(updater, arguments) { UseShellExecute = false, WorkingDirectory = package.ExtractDirectory });
+                if (requiresElevation) UpdateService.Record("INSTALL", "ELEVATION_REQUESTED", "Version=" + package.Version + ";Target=" + installDirectory);
+                Process launched = Process.Start(UpdateService.CreateUpdaterStartInfo(updater, arguments, package.ExtractDirectory, requiresElevation));
                 if (launched == null) throw new InvalidOperationException(L.T("無法啟動更新器。", "The updater could not be started."));
-                UpdateService.Record("INSTALL", "STARTED", "Version=" + package.Version + ";UpdaterPid=" + launched.Id);
+                UpdateService.Record("INSTALL", "STARTED", "Version=" + package.Version + ";UpdaterPid=" + launched.Id + ";Elevated=" + (requiresElevation ? "1" : "0"));
                 allowExit = true;
                 Close();
             }
             catch (Exception ex)
             {
-                UpdateService.Record("INSTALL", "FAILED", ex.Message);
+                var nativeError = ex as System.ComponentModel.Win32Exception;
+                bool elevationCancelled = nativeError != null && nativeError.NativeErrorCode == 1223;
+                UpdateService.Record("INSTALL", elevationCancelled ? "CANCELLED" : "FAILED", ex.Message);
                 if (updateWasMonitoring && !running && resumeState != null)
                     try { ResumeMonitoring(resumeState); } catch { }
-                AbortPreparedUpdate(L.T("無法啟動自動更新：", "Could not start automatic update: ") + ex.Message);
+                AbortPreparedUpdate(elevationCancelled
+                    ? L.T("已取消 Windows 系統管理員權限要求；目前版本會繼續執行。", "The Windows administrator permission request was cancelled. The current version will continue running.")
+                    : L.T("無法啟動自動更新：", "Could not start automatic update: ") + ex.Message);
             }
         }
 
@@ -1882,7 +1895,7 @@ namespace NetCheck
 
     internal sealed class AboutForm : Form
     {
-        internal const string AppVersion = "0.9.14";
+        internal const string AppVersion = "0.9.15";
         internal const string Purpose = "可定時監控對外網路連線，紀錄斷線並產生圖文報表，並支援網路硬碟備份，PDF 下載，程式完全免費開源無廣告。";
         internal const string EnglishPurpose = "Scheduled monitoring of external Internet connectivity, outage logging, graphical reports, cloud-drive backup, and PDF downloads. Completely free, open source, and ad-free.";
         private const string GitHubProjectUrl = "https://github.com/ahui3c/NetCheckMonitor";

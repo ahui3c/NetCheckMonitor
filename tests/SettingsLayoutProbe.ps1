@@ -31,6 +31,7 @@ try {
     $threeRows = @($speed.Top, $cloud.Top, $export.Top | Select-Object -Unique).Count -eq 3 -and
         $cloud.Top -eq $gmail.Top -and $export.Top -eq $clear.Top -and $export.Top -eq $rebuild.Top
     $smallMaintenanceButtons = $clear.Width -lt $export.Width -and $rebuild.Width -lt $export.Width
+    $normalMaintenanceFonts = $clear.Font.Size -eq $form.Font.Size -and $rebuild.Font.Size -eq $form.Font.Size
     $lastRowOrdered = $export.Right -lt $clear.Left -and $clear.Right -lt $rebuild.Left -and $rebuild.Right -le $form.ClientSize.Width
     $compactBounds = $form.ClientSize.Height -eq 700 -and ($save.Bottom + 12) -le $form.ClientSize.Height
     $simplifiedCopy = $allText.Contains('選擇使用程式內建或是最多三組自訂目標，監控中變更設定會即時生效持續監控。') -and
@@ -52,6 +53,7 @@ try {
         SimplifiedCopy = $simplifiedCopy
         ThreeFunctionRows = $threeRows
         SmallMaintenanceButtons = $smallMaintenanceButtons
+        NormalMaintenanceButtonFonts = $normalMaintenanceFonts
         LastRowOrderedWithoutOverlap = $lastRowOrdered
         CompactWindowBounds = $compactBounds
         RenderedClientSize = $form.ClientSize.ToString()

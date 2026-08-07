@@ -6,22 +6,22 @@
 
 NetCheckMonitor is a free, open-source, ad-free Windows utility that periodically checks whether a computer can reach the public Internet. It records outages over hours or days and creates graphical HTML and PDF reports suitable for troubleshooting home Internet service or documenting connection problems for an ISP.
 
-Current version: **0.9.14**
+Current version: **0.9.15**
 
-## What's new in 0.9.14
+## What's new in 0.9.15
 
-- Resumes unfinished monitoring without confirmation when both Windows sign-in startup and automatic monitoring are enabled.
-- Shortens the Settings window, simplifies its guidance, and reorganizes the function buttons from four rows into three.
-- Moves Clear Data and Rebuild Daily Reports to compact maintenance buttons on the final row without changing their safeguards.
+- Online update now requests one Windows UAC approval after verification when installed under a protected folder such as `Program Files`.
+- Elevated updates use the trusted updater already in the install folder and revalidate the manifest and every payload hash.
+- Settings maintenance buttons now use the normal font size with shorter Clear All Data and Rebuild Detail Reports labels.
 
-See the complete [0.9.14 release notes](docs/RELEASE_NOTES_0.9.14.md).
+See the complete [0.9.15 release notes](docs/RELEASE_NOTES_0.9.15.md).
 
 ## Download
 
 - [Download the portable Windows package](dist/NetCheckMonitor-Portable.zip).
 - Extract it and run `NetCheckMonitor.exe`; no installation is required.
 - Requirements: Windows 10 or 11, .NET Framework 4.8, and Microsoft Edge for PDF generation.
-- The About page includes one-click online update. It downloads, verifies, replaces, and restarts to the latest public release automatically.
+- The About page includes one-click online update. It downloads, verifies, replaces, and restarts to the latest public release automatically. When the program is under a protected folder such as `Program Files`, Windows asks once for UAC administrator permission after verification.
 
 ## Features
 

@@ -328,18 +328,16 @@ namespace NetCheck
             gmailSettingsButton.SetBounds(325, 570, 260, 32);
             gmailSettingsButton.Enabled = showGmailSettings != null;
             gmailSettingsButton.Click += delegate { if (showGmailSettings != null) showGmailSettings(); };
-            clearDataButton.Text = L.T("清除全部儲存資料…", "Clear All Saved Data…");
+            clearDataButton.Text = L.T("清除全部資料", "Clear All Data");
             clearDataButton.SetBounds(309, 612, 132, 30);
-            clearDataButton.Font = new Font(Font.FontFamily, 8F);
             clearDataButton.ForeColor = Color.Firebrick;
             clearDataButton.Enabled = clearStoredData != null;
             clearDataButton.Click += delegate { if (clearStoredData != null) clearStoredData(); };
 
             exportBackupButton.SetBounds(51, 612, 250, 30);
             exportBackupButton.Click += delegate { ExportBackupZip(); };
-            rebuildDailyReportsButton.Text = L.T("強制重製每日詳細報表", "Rebuild Daily Detail Reports");
+            rebuildDailyReportsButton.Text = L.T("強制重製詳細報表", "Rebuild Detail Reports");
             rebuildDailyReportsButton.SetBounds(449, 612, 136, 30);
-            rebuildDailyReportsButton.Font = new Font(Font.FontFamily, 8F);
             rebuildDailyReportsButton.Enabled = rebuildDailyReports != null;
             rebuildDailyReportsButton.Click += delegate { RebuildDailyReports(); };
 
