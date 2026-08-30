@@ -21,13 +21,14 @@ namespace NetCheck
     {
         private static readonly object Sync = new object();
         private static string migrationCheckedPath;
+        private static string defaultStorageDirectory;
 
         internal static string SettingsPath
         {
             get
             {
                 string value = Environment.GetEnvironmentVariable("NETCHECK_PORTABLE_SETTINGS");
-                return String.IsNullOrWhiteSpace(value) ? Path.Combine(ExecutableDirectory(), "NetCheckMonitor.settings.json") : value;
+                return String.IsNullOrWhiteSpace(value) ? Path.Combine(DefaultStorageDirectory(), "NetCheckMonitor.settings.json") : value;
             }
         }
 
@@ -36,7 +37,7 @@ namespace NetCheck
             get
             {
                 string value = Environment.GetEnvironmentVariable("NETCHECK_CLOUD_SETTINGS");
-                return String.IsNullOrWhiteSpace(value) ? Path.Combine(ExecutableDirectory(), "NetCheckMonitor.cloud.dat") : value;
+                return String.IsNullOrWhiteSpace(value) ? Path.Combine(DefaultStorageDirectory(), "NetCheckMonitor.cloud.dat") : value;
             }
         }
 
@@ -45,7 +46,7 @@ namespace NetCheck
             get
             {
                 string value = Environment.GetEnvironmentVariable("NETCHECK_GMAIL_SETTINGS");
-                return String.IsNullOrWhiteSpace(value) ? Path.Combine(ExecutableDirectory(), "NetCheckMonitor.gmail.dat") : value;
+                return String.IsNullOrWhiteSpace(value) ? Path.Combine(DefaultStorageDirectory(), "NetCheckMonitor.gmail.dat") : value;
             }
         }
 
@@ -54,7 +55,7 @@ namespace NetCheck
             get
             {
                 string value = Environment.GetEnvironmentVariable("NETCHECK_SESSION_STATE");
-                return String.IsNullOrWhiteSpace(value) ? Path.Combine(ExecutableDirectory(), "NetCheckMonitor.session.json") : value;
+                return String.IsNullOrWhiteSpace(value) ? Path.Combine(DefaultStorageDirectory(), "NetCheckMonitor.session.json") : value;
             }
         }
 
@@ -136,8 +137,26 @@ namespace NetCheck
         {
             string path = SettingsPath;
             if (String.Equals(migrationCheckedPath, path, StringComparison.OrdinalIgnoreCase)) return;
+            MigrateInstalledFiles(path, CloudPath, GmailPath, SessionPath);
             Migrate(path, CloudPath, SessionPath, LegacyMonitorDirectory(), LegacyCloudPath());
             migrationCheckedPath = path;
+        }
+
+        private static void MigrateInstalledFiles(string settingsPath, string cloudPath, string gmailPath, string sessionPath)
+        {
+            string executableDirectory = ExecutableDirectory();
+            string storageDirectory = DefaultStorageDirectory();
+            if (SamePath(executableDirectory, storageDirectory)) return;
+            MigrateInstalledFilesFromDirectory(executableDirectory, settingsPath, cloudPath, gmailPath, sessionPath);
+        }
+
+        private static void MigrateInstalledFilesFromDirectory(string executableDirectory, string settingsPath, string cloudPath, string gmailPath, string sessionPath)
+        {
+            if (!CopyLegacyFile(Path.Combine(executableDirectory, "NetCheckMonitor.settings.json"), settingsPath)
+                || !CopyLegacyFile(Path.Combine(executableDirectory, "NetCheckMonitor.cloud.dat"), cloudPath)
+                || !CopyLegacyFile(Path.Combine(executableDirectory, "NetCheckMonitor.gmail.dat"), gmailPath)
+                || !CopyLegacyFile(Path.Combine(executableDirectory, "NetCheckMonitor.session.json"), sessionPath))
+                throw new IOException("Installed settings migration could not copy all files to the user profile.");
         }
 
         private static void Migrate(string settingsPath, string cloudPath, string sessionPath, string legacyMonitorDirectory, string legacyCloudPath)
@@ -225,6 +244,71 @@ namespace NetCheck
             return String.IsNullOrEmpty(path) ? AppDomain.CurrentDomain.BaseDirectory : path;
         }
 
+        private static string DefaultStorageDirectory()
+        {
+            lock (Sync)
+            {
+                if (!String.IsNullOrEmpty(defaultStorageDirectory)) return defaultStorageDirectory;
+                string executableDirectory = ExecutableDirectory();
+                string localDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "NetCheck");
+                defaultStorageDirectory = ResolveDefaultStorageDirectory(
+                    executableDirectory,
+                    localDirectory,
+                    Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
+                    Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86),
+                    CanWriteDirectory);
+                Directory.CreateDirectory(defaultStorageDirectory);
+                return defaultStorageDirectory;
+            }
+        }
+
+        private static string ResolveDefaultStorageDirectory(string executableDirectory, string localDirectory, string programFiles, string programFilesX86, Func<string, bool> canWrite)
+        {
+            if (String.IsNullOrWhiteSpace(executableDirectory)) return localDirectory;
+            bool installed = IsSameOrChildPath(executableDirectory, programFiles) || IsSameOrChildPath(executableDirectory, programFilesX86);
+            return !installed && canWrite != null && canWrite(executableDirectory) ? executableDirectory : localDirectory;
+        }
+
+        private static bool CanWriteDirectory(string directory)
+        {
+            if (String.IsNullOrWhiteSpace(directory) || !Directory.Exists(directory)) return false;
+            string probe = Path.Combine(directory, ".netcheck-write-" + Guid.NewGuid().ToString("N") + ".tmp");
+            try
+            {
+                using (var stream = new FileStream(probe, FileMode.CreateNew, FileAccess.Write, FileShare.None, 1, FileOptions.DeleteOnClose))
+                    stream.WriteByte(0);
+                return true;
+            }
+            catch { return false; }
+            finally { try { if (File.Exists(probe)) File.Delete(probe); } catch { } }
+        }
+
+        private static bool IsSameOrChildPath(string path, string parent)
+        {
+            if (String.IsNullOrWhiteSpace(path) || String.IsNullOrWhiteSpace(parent)) return false;
+            try
+            {
+                string fullPath = Path.GetFullPath(path).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                string fullParent = Path.GetFullPath(parent).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                return String.Equals(fullPath, fullParent, StringComparison.OrdinalIgnoreCase)
+                    || fullPath.StartsWith(fullParent + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
+            }
+            catch { return false; }
+        }
+
+        private static bool SamePath(string first, string second)
+        {
+            if (String.IsNullOrWhiteSpace(first) || String.IsNullOrWhiteSpace(second)) return false;
+            try
+            {
+                return String.Equals(
+                    Path.GetFullPath(first).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
+                    Path.GetFullPath(second).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
+                    StringComparison.OrdinalIgnoreCase);
+            }
+            catch { return false; }
+        }
+
         private static string LegacyMonitorDirectory()
         {
             string value = Environment.GetEnvironmentVariable("NETCHECK_LEGACY_MONITOR_DIR");
@@ -261,6 +345,32 @@ namespace NetCheck
             return loaded.LegacyMigrationCompleted && loaded.FormatVersion == 1 && loaded.Language == "zh-TW"
                 && loaded.CloseToTrayNoticeShown == true && loaded.Monitor != null && loaded.Monitor.AutoStartMonitoring
                 && File.Exists(cloud) && File.Exists(session) && second.Language == "zh-TW";
+        }
+
+        internal static bool RunInstallPathSelfTest(string root)
+        {
+            string programFiles = Path.Combine(root, "Program Files");
+            string installed = Path.Combine(programFiles, "NetCheckMonitor");
+            string portable = Path.Combine(root, "Portable");
+            string local = Path.Combine(root, "LocalAppData", "NetCheck");
+            string installedResult = ResolveDefaultStorageDirectory(installed, local, programFiles, "", delegate { return true; });
+            string portableResult = ResolveDefaultStorageDirectory(portable, local, programFiles, "", delegate { return true; });
+            string readOnlyResult = ResolveDefaultStorageDirectory(portable, local, programFiles, "", delegate { return false; });
+            Directory.CreateDirectory(installed);
+            File.WriteAllText(Path.Combine(installed, "NetCheckMonitor.settings.json"), "settings");
+            File.WriteAllText(Path.Combine(installed, "NetCheckMonitor.cloud.dat"), "cloud");
+            File.WriteAllText(Path.Combine(installed, "NetCheckMonitor.gmail.dat"), "gmail");
+            File.WriteAllText(Path.Combine(installed, "NetCheckMonitor.session.json"), "session");
+            string migratedSettings = Path.Combine(local, "NetCheckMonitor.settings.json");
+            string migratedCloud = Path.Combine(local, "NetCheckMonitor.cloud.dat");
+            string migratedGmail = Path.Combine(local, "NetCheckMonitor.gmail.dat");
+            string migratedSession = Path.Combine(local, "NetCheckMonitor.session.json");
+            MigrateInstalledFilesFromDirectory(installed, migratedSettings, migratedCloud, migratedGmail, migratedSession);
+            bool migrated = File.ReadAllText(migratedSettings) == "settings"
+                && File.ReadAllText(migratedCloud) == "cloud"
+                && File.ReadAllText(migratedGmail) == "gmail"
+                && File.ReadAllText(migratedSession) == "session";
+            return SamePath(installedResult, local) && SamePath(portableResult, portable) && SamePath(readOnlyResult, local) && migrated;
         }
     }
 }

@@ -22,7 +22,7 @@ try {
     $env:NETCHECK_UPDATER_TEST_NO_LAUNCH = '1'
     try {
         $manifestDigest = (Get-FileHash -LiteralPath (Join-Path $source 'update-manifest.json') -Algorithm SHA256).Hash.ToLowerInvariant()
-        $arguments = @('--source', $source, '--target', $target, '--main', 'NetCheckMonitor.exe', '--version', '0.9.17', '--wait-pid', '2147483000', '--wait-start', '0', '--health', $health, '--log', $log, '--manifest-digest', $manifestDigest, '--resume', '0')
+        $arguments = @('--source', $source, '--target', $target, '--main', 'NetCheckMonitor.exe', '--version', '0.9.18', '--wait-pid', '2147483000', '--wait-start', '0', '--health', $health, '--log', $log, '--manifest-digest', $manifestDigest, '--resume', '0')
         $process = Start-Process -FilePath (Join-Path $source 'NetCheckUpdater.exe') -ArgumentList $arguments -PassThru -Wait -WindowStyle Hidden
         $exitCode = $process.ExitCode
     } finally { $env:NETCHECK_UPDATER_TEST_NO_LAUNCH = $oldTestMode }
@@ -46,7 +46,7 @@ try {
     [IO.File]::WriteAllText((Join-Path $invalidTarget 'NetCheckMonitor.exe'), 'still-old')
     $invalidLog = Join-Path $testRoot 'invalid-update.csv'
     $invalidManifestDigest = (Get-FileHash -LiteralPath (Join-Path $invalidSource 'update-manifest.json') -Algorithm SHA256).Hash.ToLowerInvariant()
-    $invalidArguments = @('--source', $invalidSource, '--target', $invalidTarget, '--main', 'NetCheckMonitor.exe', '--version', '0.9.17', '--wait-pid', '2147483000', '--wait-start', '0', '--health', (Join-Path $testRoot 'invalid-health.txt'), '--log', $invalidLog, '--manifest-digest', $invalidManifestDigest, '--resume', '0')
+    $invalidArguments = @('--source', $invalidSource, '--target', $invalidTarget, '--main', 'NetCheckMonitor.exe', '--version', '0.9.18', '--wait-pid', '2147483000', '--wait-start', '0', '--health', (Join-Path $testRoot 'invalid-health.txt'), '--log', $invalidLog, '--manifest-digest', $invalidManifestDigest, '--resume', '0')
     $invalidProcess = Start-Process -FilePath (Join-Path $invalidSource 'NetCheckUpdater.exe') -ArgumentList $invalidArguments -PassThru -Wait -WindowStyle Hidden
     $invalidPackageRejected = $invalidProcess.ExitCode -eq 2 -and (Get-Content -LiteralPath (Join-Path $invalidTarget 'NetCheckMonitor.exe') -Raw) -eq 'still-old' -and (Get-Content -LiteralPath $invalidLog -Raw) -like '*verification failed*'
 

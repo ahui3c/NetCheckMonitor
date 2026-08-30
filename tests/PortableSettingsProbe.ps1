@@ -11,12 +11,16 @@ try {
     $flags = [Reflection.BindingFlags]'Static,NonPublic'
     $migrationArgs = [object[]]::new(1); $migrationArgs[0] = [string]$testRoot
     $migrationOk = [bool]$type.GetMethod('RunMigrationSelfTest', $flags).Invoke($null, $migrationArgs)
+    $installPathArgs = [object[]]::new(1); $installPathArgs[0] = [string]$testRoot
+    $installPathOk = [bool]$type.GetMethod('RunInstallPathSelfTest', $flags).Invoke($null, $installPathArgs)
     $exeDirectory = Split-Path -Parent (Resolve-Path $Executable)
     $settingsPath = [string]$type.GetProperty('SettingsPath', $flags).GetValue($null, $null)
     $cloudPath = [string]$type.GetProperty('CloudPath', $flags).GetValue($null, $null)
+    $gmailPath = [string]$type.GetProperty('GmailPath', $flags).GetValue($null, $null)
     $sessionPath = [string]$type.GetProperty('SessionPath', $flags).GetValue($null, $null)
     $besideExecutable = [IO.Path]::GetDirectoryName($settingsPath) -eq $exeDirectory -and
         [IO.Path]::GetDirectoryName($cloudPath) -eq $exeDirectory -and
+        [IO.Path]::GetDirectoryName($gmailPath) -eq $exeDirectory -and
         [IO.Path]::GetDirectoryName($sessionPath) -eq $exeDirectory -and
         [IO.Path]::GetFileName($settingsPath) -eq 'NetCheckMonitor.settings.json'
     $oldPortable = $env:NETCHECK_PORTABLE_SETTINGS
@@ -56,8 +60,8 @@ try {
     $sessionType = $assembly.GetType('NetCheck.SessionStateStore', $true)
     $sessionArgs = [object[]]::new(1); $sessionArgs[0] = [string](Join-Path $testRoot 'session.json')
     $sessionOk = [bool]$sessionType.GetMethod('RunStorageSelfTest', [Reflection.BindingFlags]'Static,Public').Invoke($null, $sessionArgs)
-    if (-not ($migrationOk -and $besideExecutable -and $unifiedOk -and $cloudOk -and $sessionOk)) { throw 'Portable settings migration probe failed.' }
-    Write-Output 'Portable settings paths and one-time legacy migration passed.'
+    if (-not ($migrationOk -and $installPathOk -and $besideExecutable -and $unifiedOk -and $cloudOk -and $sessionOk)) { throw 'Portable and installed settings path probe failed.' }
+    Write-Output 'Portable settings, installed AppData fallback, and one-time legacy migration passed.'
 }
 finally {
     $resolvedRoot = [IO.Path]::GetFullPath($testRoot)

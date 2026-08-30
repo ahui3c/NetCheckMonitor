@@ -6,15 +6,15 @@
 
 NetCheckMonitor is a free, open-source, ad-free Windows utility that periodically checks whether a computer can reach the public Internet. It records outages over hours or days and creates graphical HTML and PDF reports suitable for troubleshooting home Internet service or documenting connection problems for an ISP.
 
-Current version: **0.9.17**
+Current version: **0.9.18**
 
-## What's new in 0.9.17
+## What's new in 0.9.18
 
-- Viewer remembers the last successfully used backup folder and scans it automatically on the next launch.
-- A reminder appears only when the path is unavailable or no usable monitoring data is found.
-- Five-minute background refreshes do not repeatedly display an empty-data reminder.
+- Fixes a startup crash when an installed copy cannot write settings into Program Files.
+- Installed copies now store settings under the user profile while portable copies retain beside-executable storage.
+- Main settings, Google Drive, Gmail, and session state migrate automatically to the safe location.
 
-See the complete [0.9.17 release notes](docs/RELEASE_NOTES_0.9.17.md).
+See the complete [0.9.18 release notes](docs/RELEASE_NOTES_0.9.18.md).
 
 ## Download
 
