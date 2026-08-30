@@ -10,6 +10,7 @@ NetCheck Viewer 是 NetCheckMonitor 的獨立多電腦集中檢視工具。它�
 - 統計檢查連線率、確認失敗、疑似異常、平均延遲、斷線事件與最長斷線。
 - 提供每日歷史、斷線事件、定時測速及來源檔案四個明細頁籤。
 - 每五分鐘自動重新掃描，並支援手動重新掃描。
+- 自動記住上次成功使用的備份資料夾；只有路徑失效或沒有可分析資料時才提醒。
 - 自動排除不同備份檔案中重複的監控與測速紀錄。
 - 對已建立 `NetCheck_Control.json` 的新版 NetCheckMonitor，可從 Viewer 修改該電腦的監控間隔與每日資料備份時間。
 - 遠端設定只允許白名單欄位與安全範圍，監控程式套用後會把實際值、時間與成功／拒絕原因寫回控制檔。
@@ -39,7 +40,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\build.ps1
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tests\NetCheckViewerProbe.ps1
 ```
 
-測試會建立三台模擬電腦資料，驗證多機分組、回傳逾期、每日統計、斷線事件、測速解析、重複排除及遠端控制檔安全寫入。
+測試會建立三台模擬電腦資料，驗證多機分組、回傳逾期、每日統計、斷線事件、測速解析、重複排除、資料夾設定保存、空資料判斷及遠端控制檔安全寫入。
 
 ## 系統需求
 

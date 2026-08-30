@@ -121,9 +121,14 @@ namespace NetCheckViewer
             if (!String.IsNullOrWhiteSpace(initialPath)) settings.BackupRoot = initialPath;
             BuildUi();
             folderBox.Text = settings.BackupRoot ?? "";
-            Shown += delegate { if (Directory.Exists(folderBox.Text)) StartScan(); };
+            Shown += delegate
+            {
+                string rememberedPath = folderBox.Text.Trim();
+                if (Directory.Exists(rememberedPath)) StartScan(true);
+                else ShowMissingFolderReminder(rememberedPath);
+            };
             refreshTimer.Interval = 5 * 60 * 1000;
-            refreshTimer.Tick += delegate { if (!scanning && Directory.Exists(folderBox.Text)) StartScan(); };
+            refreshTimer.Tick += delegate { if (!scanning && Directory.Exists(folderBox.Text)) StartScan(false); };
             refreshTimer.Start();
         }
 
@@ -154,7 +159,7 @@ namespace NetCheckViewer
             source.Controls.Add(new Label { Text = "備份資料夾", Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft, Font = new Font(Font, FontStyle.Bold) }, 0, 0);
             folderBox.Dock = DockStyle.Fill; folderBox.Margin = new Padding(0, 4, 8, 4);
             browseButton.Text = "選擇資料夾…"; StyleButton(browseButton, false); browseButton.Click += delegate { BrowseFolder(); };
-            scanButton.Text = "重新掃描"; StyleButton(scanButton, true); scanButton.Click += delegate { StartScan(); };
+            scanButton.Text = "重新掃描"; StyleButton(scanButton, true); scanButton.Click += delegate { StartScan(true); };
             openFolderButton.Text = "開啟資料夾"; StyleButton(openFolderButton, false); openFolderButton.Click += delegate { OpenFolder(); };
             filterBox.Dock = DockStyle.Fill; filterBox.DropDownStyle = ComboBoxStyle.DropDownList; filterBox.Margin = new Padding(8, 4, 0, 4);
             filterBox.Items.AddRange(new object[] { "所有電腦", "回傳正常", "回傳延遲", "長時間未回傳" }); filterBox.SelectedIndex = 0; filterBox.SelectedIndexChanged += delegate { BindMachines(); };
@@ -224,11 +229,11 @@ namespace NetCheckViewer
                 folderBox.Text = dialog.SelectedPath;
                 settings.BackupRoot = dialog.SelectedPath;
                 SettingsStore.Save(settings);
-                StartScan();
+                StartScan(true);
             }
         }
 
-        private void StartScan()
+        private void StartScan(bool notifyIfNoData)
         {
             string path = folderBox.Text.Trim();
             if (!Directory.Exists(path)) { MessageBox.Show(this, "請先選擇存在的備份資料夾。", "NetCheck Viewer", MessageBoxButtons.OK, MessageBoxIcon.Information); return; }
@@ -243,8 +248,18 @@ namespace NetCheckViewer
                 {
                     current = result; scanning = false; SetBusy(false); BindAll();
                     scanStatus.Text = "更新時間 " + result.ScannedAt.ToString("yyyy/MM/dd HH:mm:ss") + "｜" + result.CsvFileCount + " 個 CSV｜" + result.MonitoringRowCount.ToString("N0") + " 筆監控" + (result.Issues.Count > 0 ? "｜" + result.Issues.Count + " 個讀取提醒" : "");
+                    if (notifyIfNoData && !ViewerDataState.HasUsableData(result))
+                        MessageBox.Show(this, "這個資料夾內尚未找到可讀取的 NetCheck 備份資料。\r\n\r\n請確認 Google Drive 已完成同步，或按「選擇資料夾」改用其他備份位置。", "尚無備份資料", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 });
             });
+        }
+
+        private void ShowMissingFolderReminder(string rememberedPath)
+        {
+            string message = String.IsNullOrWhiteSpace(rememberedPath)
+                ? "尚未設定備份資料夾，請按「選擇資料夾」指定 NetCheck 備份位置。"
+                : "上次使用的備份資料夾目前不存在或無法存取：\r\n" + rememberedPath + "\r\n\r\n請按「選擇資料夾」重新指定位置。";
+            MessageBox.Show(this, message, "需要備份資料夾", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
 
         private void BindAll()
@@ -314,7 +329,7 @@ namespace NetCheckViewer
             {
                 ViewerControlDocument document = ViewerControlClient.Load(path);
                 using (var form = new RemoteSettingsForm(path, document))
-                    if (form.ShowDialog(this) == DialogResult.OK) StartScan();
+                    if (form.ShowDialog(this) == DialogResult.OK) StartScan(false);
             }
             catch (Exception ex) { MessageBox.Show(this, "無法讀取遠端設定：" + ex.Message, "遠端設定", MessageBoxButtons.OK, MessageBoxIcon.Error); }
         }
@@ -369,6 +384,14 @@ namespace NetCheckViewer
         private static string FileSize(long value) { if (value >= 1048576) return (value / 1048576.0).ToString("0.0") + " MB"; if (value >= 1024) return (value / 1024.0).ToString("0.0") + " KB"; return value + " B"; }
     }
 
+    internal static class ViewerDataState
+    {
+        internal static bool HasUsableData(ScanResult result)
+        {
+            return result != null && result.Machines.Count > 0;
+        }
+    }
+
     internal static class SettingsStore
     {
         private static string SettingsPath()
@@ -380,21 +403,31 @@ namespace NetCheckViewer
 
         internal static ViewerSettings Load()
         {
+            return LoadFrom(SettingsPath());
+        }
+
+        internal static void Save(ViewerSettings value)
+        {
+            SaveTo(SettingsPath(), value);
+        }
+
+        internal static ViewerSettings LoadFrom(string path)
+        {
             try
             {
-                string path = SettingsPath();
-                if (!File.Exists(path)) return ViewerSettings.Defaults();
+                if (String.IsNullOrWhiteSpace(path) || !File.Exists(path)) return ViewerSettings.Defaults();
                 ViewerSettings value = new JavaScriptSerializer().Deserialize<ViewerSettings>(File.ReadAllText(path, Encoding.UTF8));
                 return value ?? ViewerSettings.Defaults();
             }
             catch { return ViewerSettings.Defaults(); }
         }
 
-        internal static void Save(ViewerSettings value)
+        internal static void SaveTo(string path, ViewerSettings value)
         {
+            if (String.IsNullOrWhiteSpace(path) || value == null) return;
             try
             {
-                string path = SettingsPath(); string directory = Path.GetDirectoryName(path); if (!String.IsNullOrWhiteSpace(directory)) Directory.CreateDirectory(directory);
+                string directory = Path.GetDirectoryName(path); if (!String.IsNullOrWhiteSpace(directory)) Directory.CreateDirectory(directory);
                 File.WriteAllText(path, new JavaScriptSerializer().Serialize(value), new UTF8Encoding(false));
             }
             catch { }

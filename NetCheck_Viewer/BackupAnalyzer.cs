@@ -518,7 +518,15 @@ namespace NetCheckViewer
                 MachineSummary store = result.Machines.FirstOrDefault(delegate (MachineSummary m) { return m.MachineId == "E5F6A7B8"; });
                 bool controlAvailable = office != null && !String.IsNullOrWhiteSpace(ViewerControlClient.FindControlFile(office, root));
                 bool controlProtocol = ViewerControlClient.RunSelfTest(root);
-                bool ok = result.Machines.Count == 3 && office != null && store != null && office.OutageCount == 1 && office.LatestDownloadMbps > 300 && store.ReturnState == "長時間未回傳" && result.Days.Count >= 3 && controlAvailable && controlProtocol;
+                string settingsPath = Path.Combine(root, "viewer-settings-test.json");
+                SettingsStore.SaveTo(settingsPath, new ViewerSettings { BackupRoot = root, NormalReturnHours = 24, WarningReturnHours = 48 });
+                ViewerSettings remembered = SettingsStore.LoadFrom(settingsPath);
+                string emptyRoot = Path.Combine(root, "EMPTY");
+                Directory.CreateDirectory(emptyRoot);
+                ScanResult emptyResult = BackupAnalyzer.Analyze(emptyRoot, ViewerSettings.Defaults());
+                bool remembersFolder = String.Equals(remembered.BackupRoot, root, StringComparison.Ordinal) && remembered.NormalReturnHours == 24 && remembered.WarningReturnHours == 48;
+                bool dataDetection = ViewerDataState.HasUsableData(result) && !ViewerDataState.HasUsableData(emptyResult);
+                bool ok = result.Machines.Count == 3 && office != null && store != null && office.OutageCount == 1 && office.LatestDownloadMbps > 300 && store.ReturnState == "長時間未回傳" && result.Days.Count >= 3 && controlAvailable && controlProtocol && remembersFolder && dataDetection;
                 message = ok ? "NETCHECK_VIEWER_SELFTEST_OK" : "Self-test result mismatch.";
                 if (!String.IsNullOrWhiteSpace(resultPath)) File.WriteAllText(resultPath, message, Encoding.UTF8);
                 return ok;
