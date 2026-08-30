@@ -12,7 +12,7 @@ New-Item -ItemType Directory -Force -Path $OutputDirectory | Out-Null
 $outputExe = Join-Path $OutputDirectory 'NetCheck_Viewer.exe'
 $provider = New-Object Microsoft.CSharp.CSharpCodeProvider
 $parameters = New-Object System.CodeDom.Compiler.CompilerParameters
-foreach ($reference in @('System.dll', 'System.Core.dll', 'System.Drawing.dll', 'System.Windows.Forms.dll', 'System.Web.Extensions.dll')) {
+foreach ($reference in @('System.dll', 'System.Core.dll', 'System.Drawing.dll', 'System.Windows.Forms.dll', 'System.Windows.Forms.DataVisualization.dll', 'System.Web.Extensions.dll')) {
     [void]$parameters.ReferencedAssemblies.Add($reference)
 }
 $parameters.GenerateExecutable = $true
@@ -24,6 +24,9 @@ try {
     $results = $provider.CompileAssemblyFromFile($parameters, [string[]]@(
         (Join-Path $viewerRoot 'AssemblyInfo.cs'),
         (Join-Path $viewerRoot 'BackupAnalyzer.cs'),
+        (Join-Path $viewerRoot 'IncrementalScan.cs'),
+        (Join-Path $viewerRoot 'AlertCenter.cs'),
+        (Join-Path $viewerRoot 'TrendViews.cs'),
         (Join-Path $viewerRoot 'ViewerControlClient.cs'),
         (Join-Path $viewerRoot 'NetCheckViewer.cs')
     ))

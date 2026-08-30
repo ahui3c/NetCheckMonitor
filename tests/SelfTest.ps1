@@ -66,7 +66,7 @@ $aboutButtonLayout = $aboutButton.Text -eq '關於' -and $aboutButton.Width -le 
 $settingsButtonLayout = $settingsButton.Text -eq '設定' -and $settingsButton.Width -le 90 -and $settingsButton.Top -ge 495
 $pauseButton = $type.GetField('pauseButton', $flags).GetValue($form)
 $eventNoteButtonLayout = $eventNoteButton.Text -eq '事件註記' -and $eventNoteButton.Height -eq $pauseButton.Height -and $eventNoteButton.Top -eq $pauseButton.Top -and $eventNoteButton.Left -gt $pauseButton.Right -and ($eventNoteButton.Left - $pauseButton.Right) -le 12
-$homeVersionLabel = $versionLabel.Text -eq 'v0.9.18' -and $versionLabel.Font.Size -le 8.5 -and $versionLabel.ForeColor -eq [Drawing.Color]::DarkGray
+$homeVersionLabel = $versionLabel.Text -eq 'v0.9.19' -and $versionLabel.Font.Size -le 8.5 -and $versionLabel.ForeColor -eq [Drawing.Color]::DarkGray
 $monitorSettingsType = $assembly.GetType('NetCheck.MonitorSettingsStore', $true)
 $monitorSettingsStorageMethod = $monitorSettingsType.GetMethod('RunStorageSelfTest', [Reflection.BindingFlags]'Static,Public')
 $monitorSettingsStorage = $monitorSettingsStorageMethod.Invoke($null, [object[]]@($env:NETCHECK_MONITOR_SETTINGS))
@@ -140,9 +140,9 @@ $aboutFormType = $assembly.GetType('NetCheck.AboutForm', $true)
 $aboutForm = [Activator]::CreateInstance($aboutFormType)
 $checkVersionButton = $aboutFormType.GetField('checkVersionButton', $flags).GetValue($aboutForm)
 $isNewerVersionMethod = $aboutFormType.GetMethod('IsNewerVersion', [Reflection.BindingFlags]'Static,NonPublic')
-$versionComparison = $isNewerVersionMethod.Invoke($null, @('v0.9.19')) -and -not $isNewerVersionMethod.Invoke($null, @('v0.9.18')) -and -not $isNewerVersionMethod.Invoke($null, @('v0.9.17'))
+$versionComparison = $isNewerVersionMethod.Invoke($null, @('v0.9.20')) -and -not $isNewerVersionMethod.Invoke($null, @('v0.9.19')) -and -not $isNewerVersionMethod.Invoke($null, @('v0.9.18'))
 $aboutText = @($aboutForm.Controls | ForEach-Object { $_.Text }) -join "`n"
-$aboutPageContent = $aboutForm.Text -eq '關於 NetCheckMonitor' -and $aboutText.Contains('NetCheckMonitor') -and $aboutText.Contains('版本 0.9.18') -and $aboutText.Contains('可定時監控對外網路連線，紀錄斷線並產生圖文報表，並支援網路硬碟備份，PDF 下載，程式完全免費開源無廣告。') -and $aboutText.Contains('廖阿輝') -and $aboutText.Contains('chehui@gmail.com') -and $aboutText.Contains('https://ahui3c.com') -and $aboutText.Contains('https://github.com/ahui3c/NetCheckMonitor') -and $checkVersionButton.Text -eq '線上更新'
+$aboutPageContent = $aboutForm.Text -eq '關於 NetCheckMonitor' -and $aboutText.Contains('NetCheckMonitor') -and $aboutText.Contains('版本 0.9.19') -and $aboutText.Contains('可定時監控對外網路連線，紀錄斷線並產生圖文報表，並支援網路硬碟備份，PDF 下載，程式完全免費開源無廣告。') -and $aboutText.Contains('廖阿輝') -and $aboutText.Contains('chehui@gmail.com') -and $aboutText.Contains('https://ahui3c.com') -and $aboutText.Contains('https://github.com/ahui3c/NetCheckMonitor') -and $checkVersionButton.Text -eq '線上更新'
 $aboutLabels = @($aboutForm.Controls | Where-Object { $_ -is [Windows.Forms.Label] })
 $aboutLinks = @($aboutForm.Controls | Where-Object { $_ -is [Windows.Forms.LinkLabel] })
 $aboutWebsiteLink = @($aboutLinks | Where-Object { $_.Text -eq 'https://ahui3c.com' })
@@ -151,7 +151,7 @@ $aboutUrlLinkScope = [bool]($aboutLabels | Where-Object { $_.Text -eq '網站：
     [bool]($aboutLabels | Where-Object { $_.Text -eq 'GitHub 專案：' }) -and
     $aboutWebsiteLink.Count -eq 1 -and $aboutWebsiteLink[0].LinkArea.Start -eq 0 -and $aboutWebsiteLink[0].LinkArea.Length -eq $aboutWebsiteLink[0].Text.Length -and
     $aboutGitHubLink.Count -eq 1 -and $aboutGitHubLink[0].LinkArea.Start -eq 0 -and $aboutGitHubLink[0].LinkArea.Length -eq $aboutGitHubLink[0].Text.Length
-$programIdentity = $form.Text -eq '對外網路連線能力監控程式' -and $assembly.GetName().Version.ToString() -eq '0.9.18.0'
+$programIdentity = $form.Text -eq '對外網路連線能力監控程式' -and $assembly.GetName().Version.ToString() -eq '0.9.19.0'
 $applicationRecoveryType = $assembly.GetType('NetCheck.ApplicationRecovery', $true)
 $applicationRestartRegistered = $null -ne $applicationRecoveryType.GetMethod('Register', [Reflection.BindingFlags]'Static,Public')
 $embeddedIcon = [Drawing.Icon]::ExtractAssociatedIcon((Join-Path $testRoot 'NetCheckMonitor.exe'))

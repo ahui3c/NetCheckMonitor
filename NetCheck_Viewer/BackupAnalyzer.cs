@@ -14,10 +14,14 @@ namespace NetCheckViewer
         public string BackupRoot { get; set; }
         public int NormalReturnHours { get; set; }
         public int WarningReturnHours { get; set; }
+        public double AvailabilityThreshold24Hours { get; set; }
+        public int SpeedFailureThreshold { get; set; }
+        public int ControlPendingHours { get; set; }
+        public int FullReconcileMinutes { get; set; }
 
         internal static ViewerSettings Defaults()
         {
-            return new ViewerSettings { BackupRoot = "", NormalReturnHours = 36, WarningReturnHours = 72 };
+            return new ViewerSettings { BackupRoot = "", NormalReturnHours = 36, WarningReturnHours = 72, AvailabilityThreshold24Hours = 99, SpeedFailureThreshold = 2, ControlPendingHours = 1, FullReconcileMinutes = 60 };
         }
     }
 
@@ -30,9 +34,14 @@ namespace NetCheckViewer
         public readonly List<OutageEvent> Outages = new List<OutageEvent>();
         public readonly List<SpeedRecord> Speeds = new List<SpeedRecord>();
         public readonly List<SourceFileInfo> Files = new List<SourceFileInfo>();
+        public readonly List<MonitorRecord> Monitoring = new List<MonitorRecord>();
         public readonly List<string> Issues = new List<string>();
         public int CsvFileCount;
         public int MonitoringRowCount;
+        public int ParsedFileCount;
+        public int ReusedFileCount;
+        public bool FullReconciliation;
+        public long ScanMilliseconds;
     }
 
     internal sealed class MachineSummary
@@ -50,6 +59,7 @@ namespace NetCheckViewer
         public int SuspectedChecks;
         public double AvailabilityPercent;
         public double AverageLatencyMs;
+        public double MaxLatencyMs;
         public int OutageCount;
         public TimeSpan LongestOutage;
         public DateTime LatestSpeedTime;
@@ -72,6 +82,7 @@ namespace NetCheckViewer
         public int Suspected;
         public double AvailabilityPercent;
         public double AverageLatencyMs;
+        public double MaxLatencyMs;
         public int OutageCount;
         public TimeSpan OutageDuration;
         public TimeSpan LongestOutage;
@@ -115,6 +126,9 @@ namespace NetCheckViewer
         public DateTime LastWriteTime;
         public long SizeBytes;
         public int ParsedRows;
+        public int InvalidRows;
+        public DateTime DataStartTime;
+        public DateTime DataEndTime;
     }
 
     internal sealed class MonitorRecord
@@ -162,7 +176,11 @@ namespace NetCheckViewer
                         info = ParseSpeedFile(path, speeds);
                     else
                         info = ParseMonitorFile(path, monitoring);
-                    if (info != null) { result.Files.Add(info); result.CsvFileCount++; }
+                    if (info != null)
+                    {
+                        result.Files.Add(info); result.CsvFileCount++;
+                        if (info.InvalidRows > 0) result.Issues.Add(info.FileName + "：發現 " + info.InvalidRows + " 筆格式損壞或無法解析的資料列。");
+                    }
                 }
                 catch (Exception ex)
                 {
@@ -170,30 +188,35 @@ namespace NetCheckViewer
                 }
             }
 
-            DeduplicateMonitoring(monitoring);
-            DeduplicateSpeeds(speeds);
-            result.MonitoringRowCount = monitoring.Count;
-            result.Speeds.AddRange(speeds.OrderByDescending(delegate (SpeedRecord s) { return s.Time; }));
-            BuildSummaries(result, monitoring, speeds, settings ?? ViewerSettings.Defaults());
+            result.ParsedFileCount = result.CsvFileCount;
+            result.FullReconciliation = true;
+            FinalizeResult(result, monitoring, speeds, settings);
             return result;
         }
 
-        private static SourceFileInfo ParseMonitorFile(string path, List<MonitorRecord> output)
+        internal static SourceFileInfo ParseMonitorFile(string path, List<MonitorRecord> output)
         {
             string machineName = "";
             string machineId = "";
             InferFromFile(Path.GetFileName(path), false, out machineName, out machineId);
             var rows = new List<string[]>();
+            int invalidRows = 0;
+            DateTime firstTime = DateTime.MaxValue;
+            DateTime lastTime = DateTime.MinValue;
             using (var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
             using (var reader = new StreamReader(stream, Encoding.UTF8, true))
             {
                 string line;
                 while ((line = reader.ReadLine()) != null)
                 {
+                    if (String.IsNullOrWhiteSpace(line)) continue;
                     List<string> fields = ParseCsv(line);
-                    if (fields.Count < 6 || fields[0] == "Timestamp") continue;
+                    if (fields.Count > 0 && fields[0] == "Timestamp") continue;
+                    if (fields.Count < 6) { invalidRows++; continue; }
                     DateTime time;
-                    if (!DateTime.TryParse(fields[0], CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out time)) continue;
+                    if (!DateTime.TryParse(fields[0], CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out time)) { invalidRows++; continue; }
+                    if (time < firstTime) firstTime = time;
+                    if (time > lastTime) lastTime = time;
                     if (fields[1] == "MARKER" && (fields[2] == "COMPUTER" || fields[2] == "DAILY_SNAPSHOT"))
                     {
                         string parsedName, parsedId;
@@ -216,24 +239,32 @@ namespace NetCheckViewer
                 parsed++;
             }
             var file = new FileInfo(path);
-            return new SourceFileInfo { MachineName = machineName, MachineId = machineId, FileName = file.Name, FullPath = path, Kind = "監控資料", LastWriteTime = file.LastWriteTime, SizeBytes = file.Length, ParsedRows = parsed };
+            return new SourceFileInfo { MachineName = machineName, MachineId = machineId, FileName = file.Name, FullPath = path, Kind = "監控資料", LastWriteTime = file.LastWriteTime, SizeBytes = file.Length, ParsedRows = parsed, InvalidRows = invalidRows, DataStartTime = firstTime == DateTime.MaxValue ? DateTime.MinValue : firstTime, DataEndTime = lastTime };
         }
 
-        private static SourceFileInfo ParseSpeedFile(string path, List<SpeedRecord> output)
+        internal static SourceFileInfo ParseSpeedFile(string path, List<SpeedRecord> output)
         {
             string fallbackName, fallbackId;
             InferFromFile(Path.GetFileName(path), true, out fallbackName, out fallbackId);
             int parsed = 0;
+            int invalidRows = 0;
+            DateTime firstTime = DateTime.MaxValue;
+            DateTime lastTime = DateTime.MinValue;
             using (var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
             using (var reader = new StreamReader(stream, Encoding.UTF8, true))
             {
                 string line;
                 while ((line = reader.ReadLine()) != null)
                 {
+                    if (String.IsNullOrWhiteSpace(line)) continue;
                     List<string> fields = ParseCsv(line);
-                    if (fields.Count < 6 || fields[1] != "SPEEDTEST") continue;
+                    if (fields.Count > 0 && fields[0] == "Timestamp") continue;
+                    if (fields.Count < 6) { invalidRows++; continue; }
+                    if (fields[1] != "SPEEDTEST") continue;
                     DateTime time;
-                    if (!DateTime.TryParse(fields[0], CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out time)) continue;
+                    if (!DateTime.TryParse(fields[0], CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out time)) { invalidRows++; continue; }
+                    if (time < firstTime) firstTime = time;
+                    if (time > lastTime) lastTime = time;
                     Dictionary<string, string> detail = ParseDetail(fields[5]);
                     string machineName = GetDecoded(detail, "Machine");
                     string machineId = Get(detail, "MachineId");
@@ -269,7 +300,17 @@ namespace NetCheckViewer
             if (String.IsNullOrWhiteSpace(fallbackName)) fallbackName = Path.GetFileName(Path.GetDirectoryName(path)) ?? "未知電腦";
             if (String.IsNullOrWhiteSpace(fallbackId)) fallbackId = StableUnknownId(fallbackName + "|" + Path.GetDirectoryName(path));
             var file = new FileInfo(path);
-            return new SourceFileInfo { MachineName = fallbackName, MachineId = fallbackId, FileName = file.Name, FullPath = path, Kind = "定時測速", LastWriteTime = file.LastWriteTime, SizeBytes = file.Length, ParsedRows = parsed };
+            return new SourceFileInfo { MachineName = fallbackName, MachineId = fallbackId, FileName = file.Name, FullPath = path, Kind = "定時測速", LastWriteTime = file.LastWriteTime, SizeBytes = file.Length, ParsedRows = parsed, InvalidRows = invalidRows, DataStartTime = firstTime == DateTime.MaxValue ? DateTime.MinValue : firstTime, DataEndTime = lastTime };
+        }
+
+        internal static void FinalizeResult(ScanResult result, List<MonitorRecord> monitoring, List<SpeedRecord> speeds, ViewerSettings settings)
+        {
+            DeduplicateMonitoring(monitoring);
+            DeduplicateSpeeds(speeds);
+            result.Monitoring.AddRange(monitoring.OrderBy(delegate (MonitorRecord r) { return r.Time; }));
+            result.MonitoringRowCount = monitoring.Count;
+            result.Speeds.AddRange(speeds.OrderByDescending(delegate (SpeedRecord s) { return s.Time; }));
+            BuildSummaries(result, monitoring, speeds, settings ?? ViewerSettings.Defaults());
         }
 
         private static void BuildSummaries(ScanResult result, List<MonitorRecord> monitoring, List<SpeedRecord> speeds, ViewerSettings settings)
@@ -348,7 +389,7 @@ namespace NetCheckViewer
                         if (part > longest) longest = part;
                     }
                     MonitorRecord last = rows[rows.Count - 1];
-                    result.Days.Add(new DailySummary { MachineName = last.MachineName, MachineId = machineGroup.Key, Day = dayGroup.Key, Checks = checks, Online = online, Offline = offline, Suspected = suspected, AvailabilityPercent = checks == 0 ? 0 : 100.0 * online / checks, AverageLatencyMs = latency.Count == 0 ? 0 : latency.Average(delegate (MonitorRecord r) { return (double)r.Latency; }), OutageCount = dayOutages.Count, OutageDuration = duration, LongestOutage = longest });
+                    result.Days.Add(new DailySummary { MachineName = last.MachineName, MachineId = machineGroup.Key, Day = dayGroup.Key, Checks = checks, Online = online, Offline = offline, Suspected = suspected, AvailabilityPercent = checks == 0 ? 0 : 100.0 * online / checks, AverageLatencyMs = latency.Count == 0 ? 0 : latency.Average(delegate (MonitorRecord r) { return (double)r.Latency; }), MaxLatencyMs = latency.Count == 0 ? 0 : latency.Max(delegate (MonitorRecord r) { return (double)r.Latency; }), OutageCount = dayOutages.Count, OutageDuration = duration, LongestOutage = longest });
                 }
             }
             result.Days.Sort(delegate (DailySummary a, DailySummary b) { int day = b.Day.CompareTo(a.Day); return day != 0 ? day : String.Compare(a.MachineName, b.MachineName, StringComparison.OrdinalIgnoreCase); });
@@ -510,6 +551,8 @@ namespace NetCheckViewer
         internal static bool Run(string resultPath, out string message)
         {
             string root = Path.Combine(Path.GetTempPath(), "NetCheckViewerSelfTest_" + Guid.NewGuid().ToString("N"));
+            string cachePath = null;
+            string previousAlertStatePath = Environment.GetEnvironmentVariable("NETCHECK_VIEWER_ALERT_STATE_PATH");
             try
             {
                 CreateDemoData(root);
@@ -526,7 +569,32 @@ namespace NetCheckViewer
                 ScanResult emptyResult = BackupAnalyzer.Analyze(emptyRoot, ViewerSettings.Defaults());
                 bool remembersFolder = String.Equals(remembered.BackupRoot, root, StringComparison.Ordinal) && remembered.NormalReturnHours == 24 && remembered.WarningReturnHours == 48;
                 bool dataDetection = ViewerDataState.HasUsableData(result) && !ViewerDataState.HasUsableData(emptyResult);
-                bool ok = result.Machines.Count == 3 && office != null && store != null && office.OutageCount == 1 && office.LatestDownloadMbps > 300 && store.ReturnState == "長時間未回傳" && result.Days.Count >= 3 && controlAvailable && controlProtocol && remembersFolder && dataDetection;
+
+                cachePath = IncrementalScanEngine.CachePath(root);
+                ScanResult firstIncremental = IncrementalScanEngine.Analyze(root, ViewerSettings.Defaults(), true);
+                ScanResult cachedIncremental = IncrementalScanEngine.Analyze(root, ViewerSettings.Defaults(), false);
+                string changedFile = firstIncremental.Files.First(delegate (SourceFileInfo value) { return value.MachineId == "A1B2C3D4" && value.Kind == "監控資料"; }).FullPath;
+                File.AppendAllText(changedFile, Environment.NewLine + Row(DateTime.Now, "CHECK", "ONLINE", "31", "https://example.com", "incremental") + Environment.NewLine + "broken,row", new UTF8Encoding(false));
+                File.SetLastWriteTimeUtc(changedFile, DateTime.UtcNow.AddSeconds(2));
+                ScanResult changedIncremental = IncrementalScanEngine.Analyze(root, ViewerSettings.Defaults(), false);
+                bool incremental = firstIncremental.ParsedFileCount == firstIncremental.CsvFileCount && cachedIncremental.ParsedFileCount == 0
+                    && cachedIncremental.ReusedFileCount == cachedIncremental.CsvFileCount && changedIncremental.ParsedFileCount == 1
+                    && changedIncremental.ReusedFileCount == changedIncremental.CsvFileCount - 1;
+                bool corruptionDetected = changedIncremental.Issues.Any(delegate (string value) { return value.IndexOf("格式損壞", StringComparison.Ordinal) >= 0; });
+
+                string alertStatePath = Path.Combine(root, "alert-state-test.json");
+                Environment.SetEnvironmentVariable("NETCHECK_VIEWER_ALERT_STATE_PATH", alertStatePath);
+                List<ViewerAlert> alerts = AlertCenter.Build(firstIncremental, ViewerSettings.Defaults(), root);
+                bool alertCenter = alerts.Count > 0;
+                if (alerts.Count > 0)
+                {
+                    AlertCenter.SetAcknowledged(alerts[0].Key, true);
+                    alertCenter = AlertCenter.Build(firstIncremental, ViewerSettings.Defaults(), root).Any(delegate (ViewerAlert value) { return value.Key == alerts[0].Key && value.Acknowledged; });
+                }
+                bool trendData = result.Days.Any(delegate (DailySummary value) { return value.MaxLatencyMs >= value.AverageLatencyMs; })
+                    && result.Files.Any(delegate (SourceFileInfo value) { return value.DataEndTime != DateTime.MinValue; });
+
+                bool ok = result.Machines.Count == 3 && office != null && store != null && office.OutageCount == 1 && office.LatestDownloadMbps > 300 && store.ReturnState == "長時間未回傳" && result.Days.Count >= 3 && controlAvailable && controlProtocol && remembersFolder && dataDetection && incremental && corruptionDetected && alertCenter && trendData;
                 message = ok ? "NETCHECK_VIEWER_SELFTEST_OK" : "Self-test result mismatch.";
                 if (!String.IsNullOrWhiteSpace(resultPath)) File.WriteAllText(resultPath, message, Encoding.UTF8);
                 return ok;
@@ -537,7 +605,12 @@ namespace NetCheckViewer
                 if (!String.IsNullOrWhiteSpace(resultPath)) File.WriteAllText(resultPath, message, Encoding.UTF8);
                 return false;
             }
-            finally { try { if (Directory.Exists(root)) Directory.Delete(root, true); } catch { } }
+            finally
+            {
+                Environment.SetEnvironmentVariable("NETCHECK_VIEWER_ALERT_STATE_PATH", previousAlertStatePath);
+                try { if (!String.IsNullOrWhiteSpace(cachePath) && File.Exists(cachePath)) File.Delete(cachePath); } catch { }
+                try { if (Directory.Exists(root)) Directory.Delete(root, true); } catch { }
+            }
         }
 
         internal static void CreateDemoData(string root)

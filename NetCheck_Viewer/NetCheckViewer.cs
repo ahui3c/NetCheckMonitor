@@ -94,6 +94,7 @@ namespace NetCheckViewer
         private readonly Label delayedValue = new Label();
         private readonly Label availabilityValue = new Label();
         private readonly DataGridView machineGrid = NewGrid();
+        private readonly DataGridView alertGrid = NewGrid();
         private readonly DataGridView dailyGrid = NewGrid();
         private readonly DataGridView outageGrid = NewGrid();
         private readonly DataGridView speedGrid = NewGrid();
@@ -101,8 +102,17 @@ namespace NetCheckViewer
         private readonly Label selectionTitle = new Label();
         private readonly Label selectionDetail = new Label();
         private readonly System.Windows.Forms.Timer refreshTimer = new System.Windows.Forms.Timer();
+        private readonly System.Windows.Forms.Timer watcherDebounceTimer = new System.Windows.Forms.Timer();
+        private readonly CheckBox showHandledCheck = new CheckBox();
+        private readonly Button alertSettingsButton = new Button();
+        private readonly Label alertCountLabel = new Label();
+        private readonly TrendDashboard trendDashboard = new TrendDashboard();
         private ViewerSettings settings;
         private ScanResult current;
+        private List<ViewerAlert> currentAlerts = new List<ViewerAlert>();
+        private FileSystemWatcher folderWatcher;
+        private DateTime lastFullReconciliationUtc = DateTime.MinValue;
+        private bool watcherRequiresFullReconciliation;
         private bool scanning;
 
         internal bool DataLoaded { get { return current != null && !scanning; } }
@@ -113,8 +123,8 @@ namespace NetCheckViewer
             Font = new Font("Microsoft JhengHei UI", 9.5F);
             BackColor = Color.FromArgb(246, 250, 252);
             ForeColor = Ink;
-            MinimumSize = new Size(1120, 720);
-            ClientSize = new Size(1380, 880);
+            MinimumSize = new Size(1180, 760);
+            ClientSize = new Size(1440, 940);
             StartPosition = FormStartPosition.CenterScreen;
             Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
             settings = SettingsStore.Load();
@@ -124,22 +134,37 @@ namespace NetCheckViewer
             Shown += delegate
             {
                 string rememberedPath = folderBox.Text.Trim();
-                if (Directory.Exists(rememberedPath)) StartScan(true);
+                if (Directory.Exists(rememberedPath)) StartScan(true, false);
                 else ShowMissingFolderReminder(rememberedPath);
             };
             refreshTimer.Interval = 5 * 60 * 1000;
-            refreshTimer.Tick += delegate { if (!scanning && Directory.Exists(folderBox.Text)) StartScan(false); };
+            refreshTimer.Tick += delegate
+            {
+                if (scanning || !Directory.Exists(folderBox.Text)) return;
+                bool due = watcherRequiresFullReconciliation || lastFullReconciliationUtc == DateTime.MinValue
+                    || DateTime.UtcNow - lastFullReconciliationUtc >= TimeSpan.FromMinutes(Math.Max(10, settings.FullReconcileMinutes));
+                StartScan(false, due);
+            };
             refreshTimer.Start();
+            watcherDebounceTimer.Interval = 1500;
+            watcherDebounceTimer.Tick += delegate
+            {
+                watcherDebounceTimer.Stop();
+                if (scanning) { watcherDebounceTimer.Start(); return; }
+                if (Directory.Exists(folderBox.Text)) StartScan(false, watcherRequiresFullReconciliation);
+            };
+            FormClosed += delegate { refreshTimer.Stop(); watcherDebounceTimer.Stop(); DisposeWatcher(); };
         }
 
         private void BuildUi()
         {
-            var root = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 5, Padding = new Padding(22) };
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 80));
+            var root = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 6, Padding = new Padding(22) };
             root.RowStyles.Add(new RowStyle(SizeType.Absolute, 72));
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 84));
-            root.RowStyles.Add(new RowStyle(SizeType.Percent, 42));
-            root.RowStyles.Add(new RowStyle(SizeType.Percent, 58));
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 64));
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 78));
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 190));
+            root.RowStyles.Add(new RowStyle(SizeType.Percent, 36));
+            root.RowStyles.Add(new RowStyle(SizeType.Percent, 64));
             Controls.Add(root);
 
             var head = new Panel { Dock = DockStyle.Fill };
@@ -159,7 +184,7 @@ namespace NetCheckViewer
             source.Controls.Add(new Label { Text = "備份資料夾", Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft, Font = new Font(Font, FontStyle.Bold) }, 0, 0);
             folderBox.Dock = DockStyle.Fill; folderBox.Margin = new Padding(0, 4, 8, 4);
             browseButton.Text = "選擇資料夾…"; StyleButton(browseButton, false); browseButton.Click += delegate { BrowseFolder(); };
-            scanButton.Text = "重新掃描"; StyleButton(scanButton, true); scanButton.Click += delegate { StartScan(true); };
+            scanButton.Text = "完整校正"; StyleButton(scanButton, true); scanButton.Click += delegate { StartScan(true, true); };
             openFolderButton.Text = "開啟資料夾"; StyleButton(openFolderButton, false); openFolderButton.Click += delegate { OpenFolder(); };
             filterBox.Dock = DockStyle.Fill; filterBox.DropDownStyle = ComboBoxStyle.DropDownList; filterBox.Margin = new Padding(8, 4, 0, 4);
             filterBox.Items.AddRange(new object[] { "所有電腦", "回傳正常", "回傳延遲", "長時間未回傳" }); filterBox.SelectedIndex = 0; filterBox.SelectedIndexChanged += delegate { BindMachines(); };
@@ -174,9 +199,12 @@ namespace NetCheckViewer
             cards.Controls.Add(MetricCard("平均連線率", availabilityValue, Blue), 3, 0);
             root.Controls.Add(cards, 0, 2);
 
+            ConfigureAlertGrid();
+            root.Controls.Add(BuildAlertSection(), 0, 3);
+
             ConfigureMachineGrid();
             machineGrid.SelectionChanged += delegate { BindSelectedMachine(); };
-            root.Controls.Add(WrapSection("多電腦總覽", machineGrid), 0, 3);
+            root.Controls.Add(WrapSection("多電腦總覽", machineGrid), 0, 4);
 
             var lower = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 2 };
             lower.RowStyles.Add(new RowStyle(SizeType.Absolute, 62)); lower.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
@@ -186,8 +214,54 @@ namespace NetCheckViewer
             remoteSettingsButton.Text = "修改遠端設定…"; StyleButton(remoteSettingsButton, false); remoteSettingsButton.Dock = DockStyle.Right; remoteSettingsButton.Width = 170; remoteSettingsButton.Enabled = false; remoteSettingsButton.Click += delegate { OpenRemoteSettings(); };
             selected.Controls.Add(remoteSettingsButton); selected.Controls.Add(selectionTitle); selected.Controls.Add(selectionDetail); lower.Controls.Add(selected, 0, 0);
             var tabs = new TabControl { Dock = DockStyle.Fill };
-            tabs.TabPages.Add(Tab("每日歷史", dailyGrid)); tabs.TabPages.Add(Tab("斷線事件", outageGrid)); tabs.TabPages.Add(Tab("定時測速", speedGrid)); tabs.TabPages.Add(Tab("來源檔案", fileGrid));
-            ConfigureDetailGrids(); lower.Controls.Add(tabs, 0, 1); root.Controls.Add(lower, 0, 4);
+            tabs.TabPages.Add(Tab("趨勢分析", trendDashboard)); tabs.TabPages.Add(Tab("每日歷史", dailyGrid)); tabs.TabPages.Add(Tab("斷線事件", outageGrid)); tabs.TabPages.Add(Tab("定時測速", speedGrid)); tabs.TabPages.Add(Tab("來源檔案", fileGrid));
+            ConfigureDetailGrids(); lower.Controls.Add(tabs, 0, 1); root.Controls.Add(lower, 0, 5);
+        }
+
+        private void ConfigureAlertGrid()
+        {
+            AddText(alertGrid, "等級", "Severity", 70);
+            AddText(alertGrid, "電腦", "Machine", 145);
+            AddText(alertGrid, "類型", "Type", 92);
+            AddText(alertGrid, "需要處理", "Title", 220);
+            var detail = AddText(alertGrid, "說明", "Detail", 420); detail.AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill;
+            AddText(alertGrid, "偵測時間", "Detected", 140);
+            var action = new DataGridViewButtonColumn { HeaderText = "處理狀態", Name = "Action", Width = 92, FlatStyle = FlatStyle.Flat, UseColumnTextForButtonValue = false };
+            alertGrid.Columns.Add(action);
+            alertGrid.CellFormatting += delegate (object sender, DataGridViewCellFormattingEventArgs e)
+            {
+                if (e.RowIndex < 0) return;
+                ViewerAlert alert = alertGrid.Rows[e.RowIndex].Tag as ViewerAlert;
+                if (alert == null) return;
+                if (alert.Acknowledged) { e.CellStyle.ForeColor = Muted; e.CellStyle.BackColor = Color.FromArgb(247, 249, 250); return; }
+                if (alertGrid.Columns[e.ColumnIndex].Name == "Severity")
+                {
+                    e.CellStyle.ForeColor = alert.SeverityRank == 3 ? Red : alert.SeverityRank == 2 ? Amber : Blue;
+                    e.CellStyle.Font = new Font(alertGrid.Font, FontStyle.Bold);
+                }
+            };
+            alertGrid.CellContentClick += delegate (object sender, DataGridViewCellEventArgs e)
+            {
+                if (e.RowIndex < 0 || alertGrid.Columns[e.ColumnIndex].Name != "Action") return;
+                ViewerAlert alert = alertGrid.Rows[e.RowIndex].Tag as ViewerAlert;
+                if (alert == null) return;
+                AlertCenter.SetAcknowledged(alert.Key, !alert.Acknowledged);
+                alert.Acknowledged = !alert.Acknowledged;
+                BindAlerts();
+            };
+        }
+
+        private Control BuildAlertSection()
+        {
+            var panel = new Panel { Dock = DockStyle.Fill, BackColor = Color.White, Padding = new Padding(12, 42, 12, 10) };
+            panel.Controls.Add(alertGrid);
+            var title = new Label { Text = "需要處理", AutoSize = true, Font = new Font(Font.FontFamily, 11F, FontStyle.Bold), Location = new Point(13, 11), ForeColor = Ink };
+            alertCountLabel.AutoSize = true; alertCountLabel.Location = new Point(105, 14); alertCountLabel.ForeColor = Muted;
+            showHandledCheck.Text = "顯示已標記"; showHandledCheck.AutoSize = true; showHandledCheck.Anchor = AnchorStyles.Top | AnchorStyles.Right; showHandledCheck.Location = new Point(panel.Width - 265, 13); showHandledCheck.CheckedChanged += delegate { BindAlerts(); };
+            alertSettingsButton.Text = "門檻設定…"; alertSettingsButton.Size = new Size(112, 28); alertSettingsButton.Anchor = AnchorStyles.Top | AnchorStyles.Right; alertSettingsButton.Location = new Point(panel.Width - 125, 6); StyleButton(alertSettingsButton, false); alertSettingsButton.Dock = DockStyle.None; alertSettingsButton.Click += delegate { OpenAlertSettings(); };
+            panel.Resize += delegate { showHandledCheck.Left = Math.Max(400, panel.ClientSize.Width - 265); alertSettingsButton.Left = Math.Max(520, panel.ClientSize.Width - 125); };
+            panel.Controls.Add(title); panel.Controls.Add(alertCountLabel); panel.Controls.Add(showHandledCheck); panel.Controls.Add(alertSettingsButton);
+            return panel;
         }
 
         private void ConfigureMachineGrid()
@@ -229,29 +303,68 @@ namespace NetCheckViewer
                 folderBox.Text = dialog.SelectedPath;
                 settings.BackupRoot = dialog.SelectedPath;
                 SettingsStore.Save(settings);
-                StartScan(true);
+                StartScan(true, false);
             }
         }
 
-        private void StartScan(bool notifyIfNoData)
+        private void StartScan(bool notifyIfNoData, bool forceFull)
         {
             string path = folderBox.Text.Trim();
             if (!Directory.Exists(path)) { MessageBox.Show(this, "請先選擇存在的備份資料夾。", "NetCheck Viewer", MessageBoxButtons.OK, MessageBoxIcon.Information); return; }
             if (scanning) return;
-            scanning = true; SetBusy(true); scanStatus.Text = "正在掃描所有電腦的備份資料…";
+            ConfigureWatcher(path);
+            scanning = true; SetBusy(true); scanStatus.Text = forceFull ? "正在執行完整校正…" : "正在更新異動的備份資料…";
             settings.BackupRoot = path; SettingsStore.Save(settings);
             ThreadPool.QueueUserWorkItem(delegate
             {
-                ScanResult result = BackupAnalyzer.Analyze(path, settings);
+                ScanResult result = IncrementalScanEngine.Analyze(path, settings, forceFull);
                 if (IsDisposed || !IsHandleCreated) return;
                 BeginInvoke((MethodInvoker)delegate
                 {
                     current = result; scanning = false; SetBusy(false); BindAll();
-                    scanStatus.Text = "更新時間 " + result.ScannedAt.ToString("yyyy/MM/dd HH:mm:ss") + "｜" + result.CsvFileCount + " 個 CSV｜" + result.MonitoringRowCount.ToString("N0") + " 筆監控" + (result.Issues.Count > 0 ? "｜" + result.Issues.Count + " 個讀取提醒" : "");
+                    if (result.FullReconciliation) { lastFullReconciliationUtc = DateTime.UtcNow; watcherRequiresFullReconciliation = false; }
+                    scanStatus.Text = (result.FullReconciliation ? "完整校正" : "增量更新") + " " + result.ScannedAt.ToString("MM/dd HH:mm:ss")
+                        + "｜解析 " + result.ParsedFileCount + "／快取 " + result.ReusedFileCount + "｜" + result.ScanMilliseconds.ToString("N0") + " ms"
+                        + (result.Issues.Count > 0 ? "｜" + result.Issues.Count + " 個提醒" : "");
                     if (notifyIfNoData && !ViewerDataState.HasUsableData(result))
                         MessageBox.Show(this, "這個資料夾內尚未找到可讀取的 NetCheck 備份資料。\r\n\r\n請確認 Google Drive 已完成同步，或按「選擇資料夾」改用其他備份位置。", "尚無備份資料", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 });
             });
+        }
+
+        private void ConfigureWatcher(string path)
+        {
+            if (folderWatcher != null && String.Equals(folderWatcher.Path, path, StringComparison.OrdinalIgnoreCase)) return;
+            DisposeWatcher();
+            try
+            {
+                folderWatcher = new FileSystemWatcher(path) { IncludeSubdirectories = true, Filter = "*.*", NotifyFilter = NotifyFilters.FileName | NotifyFilters.DirectoryName | NotifyFilters.LastWrite | NotifyFilters.Size };
+                folderWatcher.Changed += WatcherChanged; folderWatcher.Created += WatcherChanged; folderWatcher.Deleted += WatcherChanged; folderWatcher.Renamed += WatcherChanged;
+                folderWatcher.Error += delegate { watcherRequiresFullReconciliation = true; QueueWatcherRefresh(); };
+                folderWatcher.EnableRaisingEvents = true;
+            }
+            catch { watcherRequiresFullReconciliation = true; }
+        }
+
+        private void WatcherChanged(object sender, FileSystemEventArgs e)
+        {
+            string extension = Path.GetExtension(e.FullPath);
+            if (!String.Equals(extension, ".csv", StringComparison.OrdinalIgnoreCase)
+                && !String.Equals(Path.GetFileName(e.FullPath), ViewerControlClient.FileName, StringComparison.OrdinalIgnoreCase)) return;
+            QueueWatcherRefresh();
+        }
+
+        private void QueueWatcherRefresh()
+        {
+            if (IsDisposed || !IsHandleCreated) return;
+            try { BeginInvoke((MethodInvoker)delegate { watcherDebounceTimer.Stop(); watcherDebounceTimer.Start(); }); } catch { }
+        }
+
+        private void DisposeWatcher()
+        {
+            if (folderWatcher == null) return;
+            try { folderWatcher.EnableRaisingEvents = false; folderWatcher.Dispose(); } catch { }
+            folderWatcher = null;
         }
 
         private void ShowMissingFolderReminder(string rememberedPath)
@@ -269,7 +382,27 @@ namespace NetCheckViewer
             int attention = current == null ? 0 : current.Machines.Count(delegate (MachineSummary m) { return m.ReturnState != "回傳正常"; });
             double availability = current == null || current.Machines.Count == 0 ? 0 : current.Machines.Where(delegate (MachineSummary m) { return m.Checks > 0; }).Select(delegate (MachineSummary m) { return m.AvailabilityPercent; }).DefaultIfEmpty(0).Average();
             totalValue.Text = total.ToString(); normalValue.Text = normal.ToString(); delayedValue.Text = attention.ToString(); availabilityValue.Text = availability.ToString("0.00") + "%";
+            currentAlerts = AlertCenter.Build(current, settings, folderBox.Text.Trim());
+            BindAlerts();
+            trendDashboard.Bind(current, SelectedMachineId());
             BindMachines();
+        }
+
+        private void BindAlerts()
+        {
+            alertGrid.Rows.Clear();
+            IEnumerable<ViewerAlert> alerts = currentAlerts ?? Enumerable.Empty<ViewerAlert>();
+            if (!showHandledCheck.Checked) alerts = alerts.Where(delegate (ViewerAlert value) { return !value.Acknowledged; });
+            List<ViewerAlert> visible = alerts.ToList();
+            int open = currentAlerts == null ? 0 : currentAlerts.Count(delegate (ViewerAlert value) { return !value.Acknowledged; });
+            int serious = currentAlerts == null ? 0 : currentAlerts.Count(delegate (ViewerAlert value) { return !value.Acknowledged && value.SeverityRank == 3; });
+            alertCountLabel.Text = open == 0 ? "目前沒有未處理異常" : open + " 項未處理" + (serious > 0 ? "，其中 " + serious + " 項嚴重" : "");
+            alertCountLabel.ForeColor = serious > 0 ? Red : open > 0 ? Amber : Green;
+            foreach (ViewerAlert alert in visible)
+            {
+                int row = alertGrid.Rows.Add(alert.Severity, String.IsNullOrWhiteSpace(alert.MachineName) ? "所有電腦" : alert.MachineName, alert.Type, alert.Title, alert.Detail, alert.DetectedAt.ToString("yyyy/MM/dd HH:mm"), alert.Acknowledged ? "取消標記" : "標記完成");
+                alertGrid.Rows[row].Tag = alert;
+            }
         }
 
         private void BindMachines()
@@ -301,6 +434,7 @@ namespace NetCheckViewer
             if (machine == null) { selectionTitle.Text = "尚未選擇電腦"; selectionDetail.Text = "選擇上方任一台電腦即可檢視詳細歷史。"; remoteSettingsButton.Enabled = false; remoteSettingsButton.Tag = null; return; }
             selectionTitle.Text = machine.MachineName + "  [" + machine.MachineId + "]";
             selectionDetail.Text = machine.ReturnState + "｜" + machine.Analysis + "｜最後回傳 " + DateText(machine.LastBackupTime) + (String.IsNullOrWhiteSpace(machine.FolderPath) ? "" : "｜" + machine.FolderPath);
+            trendDashboard.SelectMachine(machine.MachineId);
             string controlPath = ViewerControlClient.FindControlFile(machine, folderBox.Text.Trim());
             remoteSettingsButton.Tag = controlPath; remoteSettingsButton.Enabled = true;
             remoteSettingsButton.Text = !String.IsNullOrWhiteSpace(controlPath) ? "修改遠端設定…" : "尚未支援遠端設定";
@@ -329,9 +463,20 @@ namespace NetCheckViewer
             {
                 ViewerControlDocument document = ViewerControlClient.Load(path);
                 using (var form = new RemoteSettingsForm(path, document))
-                    if (form.ShowDialog(this) == DialogResult.OK) StartScan(false);
+                    if (form.ShowDialog(this) == DialogResult.OK) StartScan(false, false);
             }
             catch (Exception ex) { MessageBox.Show(this, "無法讀取遠端設定：" + ex.Message, "遠端設定", MessageBoxButtons.OK, MessageBoxIcon.Error); }
+        }
+
+        private void OpenAlertSettings()
+        {
+            using (var form = new AlertSettingsForm(settings))
+            {
+                if (form.ShowDialog(this) != DialogResult.OK) return;
+                form.ApplyTo(settings);
+                SettingsStore.Save(settings);
+                StartScan(false, true);
+            }
         }
         private void OpenFolder()
         {
@@ -346,7 +491,7 @@ namespace NetCheckViewer
             if (File.Exists(path)) Process.Start(new ProcessStartInfo(path) { UseShellExecute = true });
         }
 
-        private void SetBusy(bool busy) { scanButton.Enabled = browseButton.Enabled = openFolderButton.Enabled = filterBox.Enabled = !busy; scanButton.Text = busy ? "掃描中…" : "重新掃描"; }
+        private void SetBusy(bool busy) { scanButton.Enabled = browseButton.Enabled = openFolderButton.Enabled = filterBox.Enabled = alertSettingsButton.Enabled = !busy; scanButton.Text = busy ? "掃描中…" : "完整校正"; }
         private string SelectedMachineId() { return machineGrid.CurrentRow == null ? "" : Convert.ToString(machineGrid.CurrentRow.Tag); }
 
         private Panel MetricCard(string caption, Label value, Color accent)
@@ -384,6 +529,76 @@ namespace NetCheckViewer
         private static string FileSize(long value) { if (value >= 1048576) return (value / 1048576.0).ToString("0.0") + " MB"; if (value >= 1024) return (value / 1024.0).ToString("0.0") + " KB"; return value + " B"; }
     }
 
+    internal sealed class AlertSettingsForm : Form
+    {
+        private readonly NumericUpDown normalHours = Number(1, 720, 36, 1);
+        private readonly NumericUpDown seriousHours = Number(2, 1440, 72, 1);
+        private readonly NumericUpDown availability = Number(1, 100, 99, 0.1M);
+        private readonly NumericUpDown speedFailures = Number(1, 20, 2, 1);
+        private readonly NumericUpDown pendingHours = Number(1, 168, 1, 1);
+        private readonly NumericUpDown reconcileMinutes = Number(10, 1440, 60, 10);
+
+        internal AlertSettingsForm(ViewerSettings settings)
+        {
+            Text = "異常與掃描門檻";
+            Font = new Font("Microsoft JhengHei UI", 9.5F);
+            StartPosition = FormStartPosition.CenterParent;
+            FormBorderStyle = FormBorderStyle.FixedDialog;
+            MinimizeBox = false; MaximizeBox = false; ShowInTaskbar = false;
+            ClientSize = new Size(520, 390);
+            normalHours.Value = Clamp(settings.NormalReturnHours, normalHours);
+            seriousHours.Value = Clamp(settings.WarningReturnHours, seriousHours);
+            availability.Value = Clamp((decimal)settings.AvailabilityThreshold24Hours, availability);
+            speedFailures.Value = Clamp(settings.SpeedFailureThreshold, speedFailures);
+            pendingHours.Value = Clamp(settings.ControlPendingHours, pendingHours);
+            reconcileMinutes.Value = Clamp(settings.FullReconcileMinutes, reconcileMinutes);
+
+            var root = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 8, Padding = new Padding(22) };
+            root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 67)); root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33));
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
+            for (int i = 1; i <= 6; i++) root.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
+            root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+            var heading = new Label { Text = "需要處理的判定門檻", Dock = DockStyle.Fill, Font = new Font(Font.FontFamily, 14F, FontStyle.Bold), TextAlign = ContentAlignment.MiddleLeft };
+            root.Controls.Add(heading, 0, 0); root.SetColumnSpan(heading, 2);
+            AddRow(root, 1, "備份超過多久列為注意", normalHours, "小時");
+            AddRow(root, 2, "備份超過多久列為嚴重", seriousHours, "小時");
+            AddRow(root, 3, "24 小時連線率最低門檻", availability, "%");
+            AddRow(root, 4, "定時測速連續失敗門檻", speedFailures, "次");
+            AddRow(root, 5, "Viewer 設定等待套用門檻", pendingHours, "小時");
+            AddRow(root, 6, "背景完整校正間隔", reconcileMinutes, "分鐘");
+            var buttons = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.RightToLeft, WrapContents = false, Padding = new Padding(0, 12, 0, 0) };
+            var ok = new Button { Text = "儲存", DialogResult = DialogResult.OK, Width = 100, Height = 34 };
+            var cancel = new Button { Text = "取消", DialogResult = DialogResult.Cancel, Width = 100, Height = 34 };
+            buttons.Controls.Add(ok); buttons.Controls.Add(cancel); root.Controls.Add(buttons, 0, 7); root.SetColumnSpan(buttons, 2);
+            Controls.Add(root); AcceptButton = ok; CancelButton = cancel;
+        }
+
+        internal void ApplyTo(ViewerSettings settings)
+        {
+            settings.NormalReturnHours = (int)normalHours.Value;
+            settings.WarningReturnHours = Math.Max(settings.NormalReturnHours + 1, (int)seriousHours.Value);
+            settings.AvailabilityThreshold24Hours = (double)availability.Value;
+            settings.SpeedFailureThreshold = (int)speedFailures.Value;
+            settings.ControlPendingHours = (int)pendingHours.Value;
+            settings.FullReconcileMinutes = (int)reconcileMinutes.Value;
+        }
+
+        private static void AddRow(TableLayoutPanel root, int row, string text, NumericUpDown number, string suffix)
+        {
+            root.Controls.Add(new Label { Text = text, Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft }, 0, row);
+            var panel = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.LeftToRight, WrapContents = false };
+            number.Width = 105; number.Margin = new Padding(0, 5, 8, 0); panel.Controls.Add(number);
+            panel.Controls.Add(new Label { Text = suffix, AutoSize = true, Margin = new Padding(0, 10, 0, 0) }); root.Controls.Add(panel, 1, row);
+        }
+
+        private static NumericUpDown Number(decimal minimum, decimal maximum, decimal value, decimal increment)
+        {
+            return new NumericUpDown { Minimum = minimum, Maximum = maximum, Value = value, Increment = increment, DecimalPlaces = increment < 1 ? 1 : 0, ThousandsSeparator = true };
+        }
+
+        private static decimal Clamp(decimal value, NumericUpDown control) { return Math.Max(control.Minimum, Math.Min(control.Maximum, value)); }
+    }
+
     internal static class ViewerDataState
     {
         internal static bool HasUsableData(ScanResult result)
@@ -417,9 +632,21 @@ namespace NetCheckViewer
             {
                 if (String.IsNullOrWhiteSpace(path) || !File.Exists(path)) return ViewerSettings.Defaults();
                 ViewerSettings value = new JavaScriptSerializer().Deserialize<ViewerSettings>(File.ReadAllText(path, Encoding.UTF8));
-                return value ?? ViewerSettings.Defaults();
+                return Normalize(value ?? ViewerSettings.Defaults());
             }
             catch { return ViewerSettings.Defaults(); }
+        }
+
+        private static ViewerSettings Normalize(ViewerSettings value)
+        {
+            ViewerSettings defaults = ViewerSettings.Defaults();
+            if (value.NormalReturnHours <= 0) value.NormalReturnHours = defaults.NormalReturnHours;
+            if (value.WarningReturnHours <= value.NormalReturnHours) value.WarningReturnHours = Math.Max(defaults.WarningReturnHours, value.NormalReturnHours + 1);
+            if (value.AvailabilityThreshold24Hours <= 0 || value.AvailabilityThreshold24Hours > 100) value.AvailabilityThreshold24Hours = defaults.AvailabilityThreshold24Hours;
+            if (value.SpeedFailureThreshold <= 0) value.SpeedFailureThreshold = defaults.SpeedFailureThreshold;
+            if (value.ControlPendingHours <= 0) value.ControlPendingHours = defaults.ControlPendingHours;
+            if (value.FullReconcileMinutes < 10) value.FullReconcileMinutes = defaults.FullReconcileMinutes;
+            return value;
         }
 
         internal static void SaveTo(string path, ViewerSettings value)
