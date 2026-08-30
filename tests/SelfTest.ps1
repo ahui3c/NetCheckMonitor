@@ -39,6 +39,21 @@ $settingsButton = $type.GetField('settingsButton', $flags).GetValue($form)
 $eventNoteButton = $type.GetField('eventNoteButton', $flags).GetValue($form)
 $versionLabel = $type.GetField('versionLabel', $flags).GetValue($form)
 $networkInfoLabel = $type.GetField('networkInfoLabel', $flags).GetValue($form)
+$cloudBackupStatusPanel = $type.GetField('cloudBackupStatusPanel', $flags).GetValue($form)
+$cloudBackupStatusTitle = $type.GetField('cloudBackupStatusTitle', $flags).GetValue($form)
+$cloudBackupStatusDetail = $type.GetField('cloudBackupStatusDetail', $flags).GetValue($form)
+$cloudBackupSettingsLink = $type.GetField('cloudBackupSettingsLink', $flags).GetValue($form)
+$recentList = $type.GetField('recentList', $flags).GetValue($form)
+$cloudStatusMethod = $type.GetMethod('BuildCloudBackupStatusText', [Reflection.BindingFlags]'Static,NonPublic')
+$cloudDisconnectedText = @($cloudStatusMethod.Invoke($null, [object[]]@($false, $false, [TimeSpan]::Parse('23:55'), $false)))
+$cloudConnectedText = @($cloudStatusMethod.Invoke($null, [object[]]@($true, $false, [TimeSpan]::Parse('21:30'), $true)))
+$cloudBackingUpText = @($cloudStatusMethod.Invoke($null, [object[]]@($true, $true, [TimeSpan]::Parse('21:30'), $true)))
+$homeCloudBackupStatus = $cloudBackupStatusTitle.Text.Contains('Google Drive 備份：未連接') -and
+    $cloudBackupStatusDetail.Text.Contains('每日 PDF＋CSV：關閉') -and $cloudBackupStatusDetail.Text.Contains('定時測速資料備份：關閉') -and
+    $cloudBackupSettingsLink.Text -eq '設定…' -and $cloudBackupStatusPanel.Top -gt $networkInfoLabel.Bottom -and $recentList.Top -gt $cloudBackupStatusPanel.Bottom -and
+    $cloudDisconnectedText[0].Contains('未連接') -and $cloudDisconnectedText[1].Contains('尚未連接') -and
+    $cloudConnectedText[0].Contains('已連接') -and $cloudConnectedText[1].Contains('每日 PDF＋CSV：開啟（21:30）') -and $cloudConnectedText[1].Contains('定時測速資料備份：開啟') -and
+    $cloudBackingUpText[0].Contains('備份中')
 $networkStatusType = $assembly.GetType('NetCheck.NetworkStatusReader', $true)
 $networkSnapshot = $networkStatusType.GetMethod('Capture', [Reflection.BindingFlags]'Static,Public').Invoke($null, @())
 $networkStatusCapture = @('Wired', 'WiFi', 'VPN', 'Other', 'Disconnected').Contains($networkSnapshot.TypeCode) -and $networkSnapshot.WifiSignal -ge -1 -and $networkSnapshot.WifiSignal -le 100 -and $networkSnapshot.UiText.Contains('目前網卡：') -and $networkSnapshot.UiText.Contains('Wi-Fi 訊號：')
@@ -66,7 +81,7 @@ $aboutButtonLayout = $aboutButton.Text -eq '關於' -and $aboutButton.Width -le 
 $settingsButtonLayout = $settingsButton.Text -eq '設定' -and $settingsButton.Width -le 90 -and $settingsButton.Top -ge 495
 $pauseButton = $type.GetField('pauseButton', $flags).GetValue($form)
 $eventNoteButtonLayout = $eventNoteButton.Text -eq '事件註記' -and $eventNoteButton.Height -eq $pauseButton.Height -and $eventNoteButton.Top -eq $pauseButton.Top -and $eventNoteButton.Left -gt $pauseButton.Right -and ($eventNoteButton.Left - $pauseButton.Right) -le 12
-$homeVersionLabel = $versionLabel.Text -eq 'v0.9.19' -and $versionLabel.Font.Size -le 8.5 -and $versionLabel.ForeColor -eq [Drawing.Color]::DarkGray
+$homeVersionLabel = $versionLabel.Text -eq 'v0.9.20' -and $versionLabel.Font.Size -le 8.5 -and $versionLabel.ForeColor -eq [Drawing.Color]::DarkGray
 $monitorSettingsType = $assembly.GetType('NetCheck.MonitorSettingsStore', $true)
 $monitorSettingsStorageMethod = $monitorSettingsType.GetMethod('RunStorageSelfTest', [Reflection.BindingFlags]'Static,Public')
 $monitorSettingsStorage = $monitorSettingsStorageMethod.Invoke($null, [object[]]@($env:NETCHECK_MONITOR_SETTINGS))
@@ -140,9 +155,9 @@ $aboutFormType = $assembly.GetType('NetCheck.AboutForm', $true)
 $aboutForm = [Activator]::CreateInstance($aboutFormType)
 $checkVersionButton = $aboutFormType.GetField('checkVersionButton', $flags).GetValue($aboutForm)
 $isNewerVersionMethod = $aboutFormType.GetMethod('IsNewerVersion', [Reflection.BindingFlags]'Static,NonPublic')
-$versionComparison = $isNewerVersionMethod.Invoke($null, @('v0.9.20')) -and -not $isNewerVersionMethod.Invoke($null, @('v0.9.19')) -and -not $isNewerVersionMethod.Invoke($null, @('v0.9.18'))
+$versionComparison = $isNewerVersionMethod.Invoke($null, @('v0.9.21')) -and -not $isNewerVersionMethod.Invoke($null, @('v0.9.20')) -and -not $isNewerVersionMethod.Invoke($null, @('v0.9.19'))
 $aboutText = @($aboutForm.Controls | ForEach-Object { $_.Text }) -join "`n"
-$aboutPageContent = $aboutForm.Text -eq '關於 NetCheckMonitor' -and $aboutText.Contains('NetCheckMonitor') -and $aboutText.Contains('版本 0.9.19') -and $aboutText.Contains('可定時監控對外網路連線，紀錄斷線並產生圖文報表，並支援網路硬碟備份，PDF 下載，程式完全免費開源無廣告。') -and $aboutText.Contains('廖阿輝') -and $aboutText.Contains('chehui@gmail.com') -and $aboutText.Contains('https://ahui3c.com') -and $aboutText.Contains('https://github.com/ahui3c/NetCheckMonitor') -and $checkVersionButton.Text -eq '線上更新'
+$aboutPageContent = $aboutForm.Text -eq '關於 NetCheckMonitor' -and $aboutText.Contains('NetCheckMonitor') -and $aboutText.Contains('版本 0.9.20') -and $aboutText.Contains('可定時監控對外網路連線，紀錄斷線並產生圖文報表，並支援網路硬碟備份，PDF 下載，程式完全免費開源無廣告。') -and $aboutText.Contains('廖阿輝') -and $aboutText.Contains('chehui@gmail.com') -and $aboutText.Contains('https://ahui3c.com') -and $aboutText.Contains('https://github.com/ahui3c/NetCheckMonitor') -and $checkVersionButton.Text -eq '線上更新'
 $aboutLabels = @($aboutForm.Controls | Where-Object { $_ -is [Windows.Forms.Label] })
 $aboutLinks = @($aboutForm.Controls | Where-Object { $_ -is [Windows.Forms.LinkLabel] })
 $aboutWebsiteLink = @($aboutLinks | Where-Object { $_.Text -eq 'https://ahui3c.com' })
@@ -151,7 +166,7 @@ $aboutUrlLinkScope = [bool]($aboutLabels | Where-Object { $_.Text -eq '網站：
     [bool]($aboutLabels | Where-Object { $_.Text -eq 'GitHub 專案：' }) -and
     $aboutWebsiteLink.Count -eq 1 -and $aboutWebsiteLink[0].LinkArea.Start -eq 0 -and $aboutWebsiteLink[0].LinkArea.Length -eq $aboutWebsiteLink[0].Text.Length -and
     $aboutGitHubLink.Count -eq 1 -and $aboutGitHubLink[0].LinkArea.Start -eq 0 -and $aboutGitHubLink[0].LinkArea.Length -eq $aboutGitHubLink[0].Text.Length
-$programIdentity = $form.Text -eq '對外網路連線能力監控程式' -and $assembly.GetName().Version.ToString() -eq '0.9.19.0'
+$programIdentity = $form.Text -eq '對外網路連線能力監控程式' -and $assembly.GetName().Version.ToString() -eq '0.9.20.0'
 $applicationRecoveryType = $assembly.GetType('NetCheck.ApplicationRecovery', $true)
 $applicationRestartRegistered = $null -ne $applicationRecoveryType.GetMethod('Register', [Reflection.BindingFlags]'Static,Public')
 $embeddedIcon = [Drawing.Icon]::ExtractAssociatedIcon((Join-Path $testRoot 'NetCheckMonitor.exe'))
@@ -417,6 +432,7 @@ $result = [PSCustomObject]@{
     HomeVersionLabel = $homeVersionLabel
     NetworkStatusCapture = $networkStatusCapture
     NetworkInfoLabel = $networkInfoLabel.Text.Contains('目前網卡：') -and $networkInfoLabel.Text.Contains('連線類型：') -and $networkInfoLabel.Text.Contains('Wi-Fi 訊號：')
+    HomeCloudBackupStatus = [bool]$homeCloudBackupStatus
     OnlineTrayStatus = $onlineTrayStatus
     OfflineTrayStatus = $offlineTrayStatus
     MonitorSettingsStorage = [bool]$monitorSettingsStorage
@@ -492,7 +508,7 @@ if (-not $result.CsvCreated -or -not $result.HtmlCreated -or -not $result.LiveHt
     -not $result.ReportHasDailyStats -or -not $result.ReportHasEnhancedSummary -or -not $result.ReportHasNetworkInfo -or -not $result.ReportHasAdvancedDiagnostics -or -not $result.ReportHasEventNotes -or -not $result.ArchiveReportHasNetworkInfo -or -not $result.ArchiveReportHasAdvancedDiagnostics -or -not $result.ArchiveReportHasEventNotes -or -not $result.ArchiveReportHasDailyDetails -or -not $result.ReportHasComputer -or -not $result.ComputerMarker -or -not $result.TargetMarker -or -not $result.NetworkMarker -or -not $result.PowerProtectionMarker -or -not $result.EventNoteMarker -or -not $result.SuspectedCheck -or -not $result.ConfirmedOfflineCheck -or -not $result.OutageConfirmedMarker -or -not $result.FastRetrySpacing -or -not $result.BoundedOutageBackoff -or -not $result.UniqueFileName -or
     -not $result.DailyOutageCalculated -or -not $result.AllPdfCreated -or -not $result.DatePdfCreated -or -not $result.ClearAllPassed -or
     -not $result.DownloadButtonLabel -or -not $result.ExitButtonLayout -or -not $result.ExitSaveCompleted -or -not $result.ClearRemovedFromPdfDialog -or
-    -not $result.MainManagementButtonsRemoved -or -not $result.SettingsManagementButtons -or -not $result.StartButtonSinglePurpose -or -not $result.AboutButtonLayout -or -not $result.SettingsButtonLayout -or -not $result.EventNoteButtonLayout -or -not $result.HomeSpeedButtonsRemoved -or -not $result.SpeedSettingsPageContent -or -not $result.HomeVersionLabel -or -not $result.NetworkStatusCapture -or -not $result.NetworkInfoLabel -or -not $result.OnlineTrayStatus -or -not $result.OfflineTrayStatus -or -not $result.MonitorSettingsStorage -or -not $result.PortableSettingsMigration -or -not $result.AdvancedDiagnosticsClassification -or -not $result.AdvancedToggleNoRestart -or -not $result.PowerProtectionIntegration -or -not $result.ShutdownBlockDecision -or -not $result.CloseReminderStoredOnce -or -not $result.SessionStateStorage -or -not $result.ActiveStateCreated -or -not $result.ActiveStateCleared -or -not $result.ApplicationRestartRegistered -or -not $result.SingleInstanceGuard -or -not $result.DuplicateLaunchShowsExisting -or -not $result.SessionResumeIntegration -or -not $result.AutoStartMonitoring -or -not $result.UnattendedStartupResume -or -not $result.SettingsPageContent -or -not $result.SettingsLanguageSelection -or -not $result.SettingsHidesBuiltInTargets -or -not $result.SettingsCompactLayout -or -not $result.CustomTargetSequence -or -not $result.SettingsAvailableDuringMonitoring -or -not $result.EventNoteAvailableDuringMonitoring -or -not $result.EventNoteDialogContent -or -not $result.SettingsRestartIntegration -or -not $result.SettingsReenabledAfterMonitoring -or -not $result.AboutPageContent -or -not $result.AboutUrlLinkScope -or -not $result.UpdateVersionComparison -or -not $result.Tls12UpdateCheck -or -not $result.ProgramIdentity -or -not $result.CustomIconEmbedded -or -not $result.CloudDailyPdf -or -not $result.CloudDailyCsv -or -not $result.CloudStorageProtected -or -not $result.CloudComputerFolder -or
+    -not $result.MainManagementButtonsRemoved -or -not $result.SettingsManagementButtons -or -not $result.StartButtonSinglePurpose -or -not $result.AboutButtonLayout -or -not $result.SettingsButtonLayout -or -not $result.EventNoteButtonLayout -or -not $result.HomeSpeedButtonsRemoved -or -not $result.SpeedSettingsPageContent -or -not $result.HomeVersionLabel -or -not $result.NetworkStatusCapture -or -not $result.NetworkInfoLabel -or -not $result.HomeCloudBackupStatus -or -not $result.OnlineTrayStatus -or -not $result.OfflineTrayStatus -or -not $result.MonitorSettingsStorage -or -not $result.PortableSettingsMigration -or -not $result.AdvancedDiagnosticsClassification -or -not $result.AdvancedToggleNoRestart -or -not $result.PowerProtectionIntegration -or -not $result.ShutdownBlockDecision -or -not $result.CloseReminderStoredOnce -or -not $result.SessionStateStorage -or -not $result.ActiveStateCreated -or -not $result.ActiveStateCleared -or -not $result.ApplicationRestartRegistered -or -not $result.SingleInstanceGuard -or -not $result.DuplicateLaunchShowsExisting -or -not $result.SessionResumeIntegration -or -not $result.AutoStartMonitoring -or -not $result.UnattendedStartupResume -or -not $result.SettingsPageContent -or -not $result.SettingsLanguageSelection -or -not $result.SettingsHidesBuiltInTargets -or -not $result.SettingsCompactLayout -or -not $result.CustomTargetSequence -or -not $result.SettingsAvailableDuringMonitoring -or -not $result.EventNoteAvailableDuringMonitoring -or -not $result.EventNoteDialogContent -or -not $result.SettingsRestartIntegration -or -not $result.SettingsReenabledAfterMonitoring -or -not $result.AboutPageContent -or -not $result.AboutUrlLinkScope -or -not $result.UpdateVersionComparison -or -not $result.Tls12UpdateCheck -or -not $result.ProgramIdentity -or -not $result.CustomIconEmbedded -or -not $result.CloudDailyPdf -or -not $result.CloudDailyCsv -or -not $result.CloudStorageProtected -or -not $result.CloudComputerFolder -or
     -not $result.OAuthBuiltInClient -or -not $result.OAuthRequestForms -or -not $result.OAuthLoginOnlyUi -or -not $result.GmailStorageProtected -or -not $result.GmailSelfRecipientMime -or -not $result.GmailLargeReportPayload -or -not $result.GmailMachineNameSubject -or -not $result.GmailOAuthRequest -or -not $result.GmailFixedSelfRecipientUi -or -not $result.LanguageRouting -or -not $result.LanguageStorage -or -not $result.FirstRunLanguageSelection -or -not $result.EnglishUi) {
     throw 'NetCheck self-test failed.'
 }

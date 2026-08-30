@@ -18,6 +18,7 @@ namespace NetCheckViewer
         public int SpeedFailureThreshold { get; set; }
         public int ControlPendingHours { get; set; }
         public int FullReconcileMinutes { get; set; }
+        public bool IntroDismissed { get; set; }
 
         internal static ViewerSettings Defaults()
         {
@@ -562,12 +563,17 @@ namespace NetCheckViewer
                 bool controlAvailable = office != null && !String.IsNullOrWhiteSpace(ViewerControlClient.FindControlFile(office, root));
                 bool controlProtocol = ViewerControlClient.RunSelfTest(root);
                 string settingsPath = Path.Combine(root, "viewer-settings-test.json");
-                SettingsStore.SaveTo(settingsPath, new ViewerSettings { BackupRoot = root, NormalReturnHours = 24, WarningReturnHours = 48 });
+                SettingsStore.SaveTo(settingsPath, new ViewerSettings { BackupRoot = root, NormalReturnHours = 24, WarningReturnHours = 48, IntroDismissed = true });
                 ViewerSettings remembered = SettingsStore.LoadFrom(settingsPath);
                 string emptyRoot = Path.Combine(root, "EMPTY");
                 Directory.CreateDirectory(emptyRoot);
                 ScanResult emptyResult = BackupAnalyzer.Analyze(emptyRoot, ViewerSettings.Defaults());
-                bool remembersFolder = String.Equals(remembered.BackupRoot, root, StringComparison.Ordinal) && remembered.NormalReturnHours == 24 && remembered.WarningReturnHours == 48;
+                bool remembersFolder = String.Equals(remembered.BackupRoot, root, StringComparison.Ordinal) && remembered.NormalReturnHours == 24 && remembered.WarningReturnHours == 48 && remembered.IntroDismissed;
+                bool onboardingCopy = ViewerIntroContent.Positioning.IndexOf("不是即時主從", StringComparison.Ordinal) >= 0
+                    && ViewerIntroContent.Usage.IndexOf("Google Drive", StringComparison.Ordinal) >= 0
+                    && ViewerIntroContent.Capabilities.IndexOf("非同步", StringComparison.Ordinal) >= 0;
+                bool onboardingSetting;
+                using (var intro = new ViewerIntroForm(true)) onboardingSetting = intro.DoNotShowAgain;
                 bool dataDetection = ViewerDataState.HasUsableData(result) && !ViewerDataState.HasUsableData(emptyResult);
 
                 cachePath = IncrementalScanEngine.CachePath(root);
@@ -594,7 +600,7 @@ namespace NetCheckViewer
                 bool trendData = result.Days.Any(delegate (DailySummary value) { return value.MaxLatencyMs >= value.AverageLatencyMs; })
                     && result.Files.Any(delegate (SourceFileInfo value) { return value.DataEndTime != DateTime.MinValue; });
 
-                bool ok = result.Machines.Count == 3 && office != null && store != null && office.OutageCount == 1 && office.LatestDownloadMbps > 300 && store.ReturnState == "長時間未回傳" && result.Days.Count >= 3 && controlAvailable && controlProtocol && remembersFolder && dataDetection && incremental && corruptionDetected && alertCenter && trendData;
+                bool ok = result.Machines.Count == 3 && office != null && store != null && office.OutageCount == 1 && office.LatestDownloadMbps > 300 && store.ReturnState == "長時間未回傳" && result.Days.Count >= 3 && controlAvailable && controlProtocol && remembersFolder && onboardingCopy && onboardingSetting && dataDetection && incremental && corruptionDetected && alertCenter && trendData;
                 message = ok ? "NETCHECK_VIEWER_SELFTEST_OK" : "Self-test result mismatch.";
                 if (!String.IsNullOrWhiteSpace(resultPath)) File.WriteAllText(resultPath, message, Encoding.UTF8);
                 return ok;

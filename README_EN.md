@@ -6,15 +6,15 @@
 
 NetCheckMonitor is a free, open-source, ad-free Windows utility that periodically checks whether a computer can reach the public Internet. It records outages over hours or days and creates graphical HTML and PDF reports suitable for troubleshooting home Internet service or documenting connection problems for an ISP.
 
-Current version: **0.9.19**
+Current version: **0.9.20**
 
-## What's new in 0.9.19
+## What's new in 0.9.20
 
-- NetCheck Viewer adds an incident center for backup, availability, speed-test, remote-setting, and CSV integrity issues.
-- Incremental indexing and file-system events now reparse only new or changed CSV files, backed by periodic full reconciliation.
-- New 7/30/90-day availability, latency, speed, backup-delay, and outage-hour trends support multi-computer comparison.
+- The monitor home page now shows Google Drive connection, daily PDF/CSV backup, and scheduled speed-test backup status.
+- NetCheck Viewer 0.3.1 adds first-run guidance for the shared Google Drive workflow, Viewer positioning, and asynchronous limitations.
+- Adds a WinGet ZIP portable manifest generator, validation probe, and release-maintenance guide.
 
-See the complete [0.9.19 release notes](docs/RELEASE_NOTES_0.9.19.md).
+See the complete [0.9.20 release notes](docs/RELEASE_NOTES_0.9.20.md).
 
 ## Download
 
@@ -22,6 +22,18 @@ See the complete [0.9.19 release notes](docs/RELEASE_NOTES_0.9.19.md).
 - [Download NetCheck Viewer for Windows](https://github.com/ahui3c/NetCheckMonitor/releases/latest/download/NetCheck_Viewer-Portable.zip).
 - Extract it and run `NetCheckMonitor.exe`; no installation is required.
 - Requirements: Windows 10 or 11, .NET Framework 4.8, and Microsoft Edge for PDF generation.
+
+### WinGet
+
+After the package is accepted into the WinGet Community Repository, Windows Package Manager can install, upgrade, and uninstall it:
+
+```powershell
+winget install --id AHui3C.NetCheckMonitor --exact
+winget upgrade --id AHui3C.NetCheckMonitor --exact
+winget uninstall --id AHui3C.NetCheckMonitor --exact
+```
+
+See the [WinGet release guide](docs/WINGET.md) for manifest maintenance and submission details.
 - The About page includes one-click online update. It downloads, verifies, replaces, and restarts to the latest public release automatically. When the program is under a protected folder such as `Program Files`, Windows asks once for UAC administrator permission after verification.
 
 ## Features

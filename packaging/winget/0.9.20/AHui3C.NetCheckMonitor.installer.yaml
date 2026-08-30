@@ -1,0 +1,20 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.installer.1.10.0.schema.json
+PackageIdentifier: AHui3C.NetCheckMonitor
+PackageVersion: 0.9.20
+InstallerType: zip
+NestedInstallerType: portable
+Scope: user
+UpgradeBehavior: install
+RequireExplicitUpgrade: true
+Commands:
+- NetCheckMonitor
+ReleaseDate: 2026-08-30
+Installers:
+- Architecture: neutral
+  NestedInstallerFiles:
+  - RelativeFilePath: NetCheckMonitor.exe
+    PortableCommandAlias: NetCheckMonitor
+  InstallerUrl: https://github.com/ahui3c/NetCheckMonitor/releases/download/v0.9.20/NetCheckMonitor-Portable.zip
+  InstallerSha256: 27F12D9984B8466F10B0CB259E10825D5B77B4AAA33F87A1920934B26E48DDEC
+ManifestType: installer
+ManifestVersion: 1.10.0

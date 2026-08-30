@@ -29,6 +29,11 @@ namespace NetCheckViewer
                 Environment.ExitCode = RenderTest(args[1]) ? 0 : 1;
                 return;
             }
+            if (args.Length > 1 && String.Equals(args[0], "--render-intro", StringComparison.OrdinalIgnoreCase))
+            {
+                Environment.ExitCode = RenderIntro(args[1]) ? 0 : 1;
+                return;
+            }
             if (args.Length > 2 && String.Equals(args[0], "--render-folder", StringComparison.OrdinalIgnoreCase))
             {
                 Environment.ExitCode = RenderFolder(args[1], args[2]) ? 0 : 1;
@@ -47,6 +52,27 @@ namespace NetCheckViewer
             finally { try { if (Directory.Exists(root)) Directory.Delete(root, true); } catch { } }
         }
 
+        private static bool RenderIntro(string outputPath)
+        {
+            try
+            {
+                Application.EnableVisualStyles();
+                Application.SetCompatibleTextRenderingDefault(false);
+                using (var form = new ViewerIntroForm(false))
+                {
+                    form.Show(); Application.DoEvents(); form.Refresh(); Application.DoEvents();
+                    using (var bitmap = new Bitmap(form.ClientSize.Width, form.ClientSize.Height))
+                    {
+                        form.DrawToBitmap(bitmap, new Rectangle(Point.Empty, form.ClientSize));
+                        bitmap.Save(outputPath, System.Drawing.Imaging.ImageFormat.Png);
+                    }
+                    form.Close();
+                }
+                return File.Exists(outputPath) && new FileInfo(outputPath).Length > 0;
+            }
+            catch (Exception ex) { try { File.WriteAllText(outputPath + ".error.txt", ex.ToString(), Encoding.UTF8); } catch { } return false; }
+        }
+
         private static bool RenderFolder(string root, string outputPath)
         {
             try
@@ -54,7 +80,7 @@ namespace NetCheckViewer
                 if (!Directory.Exists(root)) return false;
                 Application.EnableVisualStyles();
                 Application.SetCompatibleTextRenderingDefault(false);
-                using (var form = new ViewerForm(root))
+                using (var form = new ViewerForm(root, true))
                 {
                     form.Show();
                     DateTime deadline = DateTime.Now.AddSeconds(30);
@@ -89,6 +115,7 @@ namespace NetCheckViewer
         private readonly Button remoteSettingsButton = new Button();
         private readonly ComboBox filterBox = new ComboBox();
         private readonly Label scanStatus = new Label();
+        private readonly LinkLabel helpLink = new LinkLabel();
         private readonly Label totalValue = new Label();
         private readonly Label normalValue = new Label();
         private readonly Label delayedValue = new Label();
@@ -117,7 +144,7 @@ namespace NetCheckViewer
 
         internal bool DataLoaded { get { return current != null && !scanning; } }
 
-        internal ViewerForm(string initialPath)
+        internal ViewerForm(string initialPath, bool suppressIntro = false)
         {
             Text = "NetCheck Viewer｜多電腦監控資料中心";
             Font = new Font("Microsoft JhengHei UI", 9.5F);
@@ -133,6 +160,7 @@ namespace NetCheckViewer
             folderBox.Text = settings.BackupRoot ?? "";
             Shown += delegate
             {
+                if (!suppressIntro && !settings.IntroDismissed) ShowViewerIntro();
                 string rememberedPath = folderBox.Text.Trim();
                 if (Directory.Exists(rememberedPath)) StartScan(true, false);
                 else ShowMissingFolderReminder(rememberedPath);
@@ -170,8 +198,9 @@ namespace NetCheckViewer
             var head = new Panel { Dock = DockStyle.Fill };
             var title = new Label { Text = "NetCheck Viewer", Font = new Font(Font.FontFamily, 25F, FontStyle.Bold), AutoSize = true, Location = new Point(0, 2), ForeColor = Ink };
             var subtitle = new Label { Text = "集中檢視所有電腦回傳的監控、斷線、測速與備份狀態", AutoSize = true, Location = new Point(3, 46), ForeColor = Muted };
-            scanStatus.AutoSize = false; scanStatus.TextAlign = ContentAlignment.MiddleRight; scanStatus.Dock = DockStyle.Right; scanStatus.Width = 430; scanStatus.ForeColor = Muted;
-            head.Controls.Add(title); head.Controls.Add(subtitle); head.Controls.Add(scanStatus);
+            scanStatus.AutoSize = false; scanStatus.TextAlign = ContentAlignment.MiddleRight; scanStatus.Size = new Size(430, 28); scanStatus.Location = new Point(Math.Max(400, head.ClientSize.Width - 430), 39); scanStatus.Anchor = AnchorStyles.Top | AnchorStyles.Right; scanStatus.ForeColor = Muted;
+            helpLink.Text = "使用說明"; helpLink.AutoSize = true; helpLink.LinkColor = Blue; helpLink.ActiveLinkColor = Ink; helpLink.Font = new Font(Font, FontStyle.Bold); helpLink.Location = new Point(Math.Max(420, head.ClientSize.Width - 505), 8); helpLink.Anchor = AnchorStyles.Top | AnchorStyles.Right; helpLink.Click += delegate { ShowViewerIntro(); };
+            head.Controls.Add(title); head.Controls.Add(subtitle); head.Controls.Add(scanStatus); head.Controls.Add(helpLink); helpLink.BringToFront();
             root.Controls.Add(head, 0, 0);
 
             var source = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 6, Padding = new Padding(0, 8, 0, 8) };
@@ -375,6 +404,17 @@ namespace NetCheckViewer
             MessageBox.Show(this, message, "需要備份資料夾", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
 
+        private void ShowViewerIntro()
+        {
+            using (var form = new ViewerIntroForm(settings.IntroDismissed))
+            {
+                form.ShowDialog(this);
+                if (settings.IntroDismissed == form.DoNotShowAgain) return;
+                settings.IntroDismissed = form.DoNotShowAgain;
+                SettingsStore.Save(settings);
+            }
+        }
+
         private void BindAll()
         {
             int total = current == null ? 0 : current.Machines.Count;
@@ -527,6 +567,93 @@ namespace NetCheckViewer
         private static string SpeedStatus(string value) { return value == "COMPLETED" ? "完成" : value == "SKIPPED" ? "略過" : value == "CANCELLED" ? "取消" : "失敗"; }
         private static string Duration(TimeSpan value) { if (value.TotalDays >= 1) return ((int)value.TotalDays) + " 天 " + value.Hours + " 小時"; if (value.TotalHours >= 1) return ((int)value.TotalHours) + " 小時 " + value.Minutes + " 分"; if (value.TotalMinutes >= 1) return ((int)value.TotalMinutes) + " 分 " + value.Seconds + " 秒"; return Math.Max(0, (int)value.TotalSeconds) + " 秒"; }
         private static string FileSize(long value) { if (value >= 1048576) return (value / 1048576.0).ToString("0.0") + " MB"; if (value >= 1024) return (value / 1024.0).ToString("0.0") + " KB"; return value + " B"; }
+    }
+
+    internal static class ViewerIntroContent
+    {
+        internal const string Positioning = "NetCheck Viewer 是 NetCheckMonitor 的獨立集中分析工具，不是即時主從控制系統。Viewer 不會直接連線、登入或遙控其他電腦，而是讀取已同步到本機的備份資料。";
+        internal const string Usage = "請讓每台受監控電腦使用 NetCheckMonitor 登入同一個 Google 帳號並開啟 Google Drive 備份。各電腦的報表會分別存入 Net_Check／電腦名稱資料夾；中央電腦再透過 Google Drive 電腦版同步同一個 Net_Check 資料夾，交由 Viewer 統一分析。";
+        internal const string Capabilities = "Viewer 可集中檢查多台電腦的最後回傳時間、連線率、斷線事件、測速、趨勢與異常。也能透過同步控制檔，非同步調整監控間隔與每日備份時間。設定何時生效取決於 Google Drive 同步及監控程式下一次檢查，不是即時遠端操作。";
+    }
+
+    internal sealed class ViewerIntroForm : Form
+    {
+        private readonly CheckBox doNotShowAgain = new CheckBox();
+        internal bool DoNotShowAgain { get { return doNotShowAgain.Checked; } }
+
+        internal ViewerIntroForm(bool dismissed)
+        {
+            Text = "NetCheck Viewer 使用說明";
+            Font = new Font("Microsoft JhengHei UI", 9.5F);
+            BackColor = Color.FromArgb(242, 248, 252);
+            ForeColor = Color.FromArgb(27, 49, 72);
+            StartPosition = FormStartPosition.CenterParent;
+            FormBorderStyle = FormBorderStyle.FixedDialog;
+            MinimizeBox = false; MaximizeBox = false; ShowInTaskbar = false;
+            ClientSize = new Size(760, 630);
+            try { Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath); } catch { }
+
+            var root = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 5, Padding = new Padding(22) };
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 88));
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 112));
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 132));
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 174));
+            root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+            Controls.Add(root);
+
+            var hero = new Panel { Dock = DockStyle.Fill, BackColor = Color.FromArgb(28, 119, 206), Padding = new Padding(20, 12, 20, 10), Margin = new Padding(0, 0, 0, 10) };
+            hero.Controls.Add(new Label { Text = "集中分析，不是即時遙控", AutoSize = true, Font = new Font(Font.FontFamily, 20F, FontStyle.Bold), ForeColor = Color.White, Location = new Point(18, 10) });
+            hero.Controls.Add(new Label { Text = "第一次使用前，先了解 Viewer 如何取得多台電腦的資料", AutoSize = true, Font = new Font(Font.FontFamily, 10F), ForeColor = Color.FromArgb(220, 239, 253), Location = new Point(21, 52) });
+            root.Controls.Add(hero, 0, 0);
+
+            var flow = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 5, Padding = new Padding(0, 7, 0, 8), Margin = new Padding(0) };
+            flow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 29)); flow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 6));
+            flow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 29)); flow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 6)); flow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 30));
+            flow.Controls.Add(FlowNode("多台監控電腦", "各自產生報表與記錄", Color.FromArgb(35, 157, 97)), 0, 0);
+            flow.Controls.Add(FlowArrow(), 1, 0);
+            flow.Controls.Add(FlowNode("同一 Google Drive", "分電腦資料夾同步", Color.FromArgb(28, 119, 206)), 2, 0);
+            flow.Controls.Add(FlowArrow(), 3, 0);
+            flow.Controls.Add(FlowNode("NetCheck Viewer", "中央檢視與趨勢分析", Color.FromArgb(165, 83, 182)), 4, 0);
+            root.Controls.Add(flow, 0, 1);
+
+            root.Controls.Add(InfoCard("Viewer 的定位", ViewerIntroContent.Positioning, Color.FromArgb(229, 241, 250)), 0, 2);
+
+            var details = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, Padding = new Padding(0), Margin = new Padding(0) };
+            details.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50)); details.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+            details.Controls.Add(InfoCard("開始使用", ViewerIntroContent.Usage, Color.FromArgb(234, 247, 240)), 0, 0);
+            Control capability = InfoCard("可以做什麼", ViewerIntroContent.Capabilities, Color.FromArgb(247, 239, 250)); capability.Margin = new Padding(6, 0, 0, 0);
+            details.Controls.Add(capability, 1, 0); root.Controls.Add(details, 0, 3);
+
+            var footer = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, Padding = new Padding(3, 14, 0, 0) };
+            footer.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); footer.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 150));
+            doNotShowAgain.Text = "下次啟動時不再自動顯示此說明"; doNotShowAgain.AutoSize = true; doNotShowAgain.Checked = dismissed; doNotShowAgain.Margin = new Padding(0, 11, 0, 0);
+            var close = new Button { Text = "了解，開始使用", DialogResult = DialogResult.OK, Dock = DockStyle.Fill, Height = 38, FlatStyle = FlatStyle.Flat, BackColor = Color.FromArgb(28, 119, 206), ForeColor = Color.White, Font = new Font(Font, FontStyle.Bold), Margin = new Padding(8, 0, 0, 0) };
+            close.FlatAppearance.BorderColor = Color.FromArgb(28, 119, 206);
+            footer.Controls.Add(doNotShowAgain, 0, 0); footer.Controls.Add(close, 1, 0); root.Controls.Add(footer, 0, 4);
+            AcceptButton = close;
+        }
+
+        private static Control FlowNode(string title, string detail, Color accent)
+        {
+            var panel = new Panel { Dock = DockStyle.Fill, BackColor = Color.White, Padding = new Padding(12), Margin = new Padding(0, 0, 0, 0) };
+            panel.Paint += delegate (object sender, PaintEventArgs e) { using (var brush = new SolidBrush(accent)) e.Graphics.FillRectangle(brush, 0, 0, panel.Width, 5); };
+            panel.Controls.Add(new Label { Text = title, AutoSize = false, Dock = DockStyle.Top, Height = 31, TextAlign = ContentAlignment.BottomCenter, Font = new Font("Microsoft JhengHei UI", 10F, FontStyle.Bold), ForeColor = Color.FromArgb(27, 49, 72) });
+            panel.Controls.Add(new Label { Text = detail, AutoSize = false, Dock = DockStyle.Bottom, Height = 31, TextAlign = ContentAlignment.TopCenter, Font = new Font("Microsoft JhengHei UI", 8.5F), ForeColor = Color.FromArgb(91, 112, 132) });
+            return panel;
+        }
+
+        private static Control FlowArrow()
+        {
+            return new Label { Text = "→", Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleCenter, Font = new Font("Segoe UI Symbol", 18F, FontStyle.Bold), ForeColor = Color.FromArgb(91, 112, 132) };
+        }
+
+        private static Control InfoCard(string title, string content, Color background)
+        {
+            var panel = new Panel { Dock = DockStyle.Fill, BackColor = background, Padding = new Padding(16, 12, 16, 10), Margin = new Padding(0, 5, 0, 5) };
+            panel.Controls.Add(new Label { Text = content, AutoSize = false, Dock = DockStyle.Fill, Padding = new Padding(0, 31, 0, 0), Font = new Font("Microsoft JhengHei UI", 9.2F), ForeColor = Color.FromArgb(50, 70, 89) });
+            panel.Controls.Add(new Label { Text = title, AutoSize = false, Dock = DockStyle.Top, Height = 28, Font = new Font("Microsoft JhengHei UI", 11F, FontStyle.Bold), ForeColor = Color.FromArgb(27, 49, 72) });
+            return panel;
+        }
     }
 
     internal sealed class AlertSettingsForm : Form

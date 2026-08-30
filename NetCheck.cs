@@ -18,8 +18,8 @@ using Microsoft.Win32;
 [assembly: AssemblyProduct("NetCheckMonitor")]
 [assembly: AssemblyDescription("Internet connection monitoring and outage reporting")]
 [assembly: AssemblyCompany("廖阿輝")]
-[assembly: AssemblyVersion("0.9.19.0")]
-[assembly: AssemblyFileVersion("0.9.19.0")]
+[assembly: AssemblyVersion("0.9.20.0")]
+[assembly: AssemblyFileVersion("0.9.20.0")]
 
 namespace NetCheck
 {
@@ -107,6 +107,11 @@ namespace NetCheck
         private readonly Label versionLabel = new Label();
         private readonly NumericUpDown intervalBox = new NumericUpDown();
         private readonly ListView recentList = new ListView();
+        private readonly Panel cloudBackupStatusPanel = new Panel();
+        private readonly Label cloudBackupStatusTitle = new Label();
+        private readonly Label cloudBackupStatusDetail = new Label();
+        private readonly LinkLabel cloudBackupSettingsLink = new LinkLabel();
+        private readonly ToolTip cloudBackupStatusToolTip = new ToolTip();
         private readonly NotifyIcon trayIcon = new NotifyIcon();
         private Icon neutralTrayIcon;
         private Icon checkingTrayIcon;
@@ -148,6 +153,7 @@ namespace NetCheck
         private int speedTestRunning;
         private SpeedTestCancellation speedCancellation;
         private System.Windows.Forms.Timer updateWaitTimer;
+        private System.Windows.Forms.Timer cloudBackupStatusTimer;
         private UpdatePackage pendingUpdate;
         private DateTime updateWaitDeadline;
         private bool updateWasMonitoring;
@@ -247,8 +253,37 @@ namespace NetCheck
             networkInfoLabel.Font = new Font(Font.FontFamily, 8.5F);
             networkInfoLabel.SetBounds(27, 217, 728, 24);
 
-            recentList.Location = new Point(25, 249);
-            recentList.Size = new Size(730, 289);
+            cloudBackupStatusPanel.SetBounds(25, 244, 730, 52);
+            cloudBackupStatusPanel.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+            cloudBackupStatusPanel.BackColor = Color.FromArgb(244, 248, 252);
+            cloudBackupStatusPanel.Padding = new Padding(12, 5, 10, 4);
+            cloudBackupStatusPanel.Paint += delegate(object sender, PaintEventArgs e)
+            {
+                Color accent = cloudManager != null && cloudManager.BackupInProgress
+                    ? Color.DarkOrange
+                    : cloudManager != null && cloudManager.Connected ? Color.SeaGreen : Color.SlateGray;
+                using (var brush = new SolidBrush(accent)) e.Graphics.FillRectangle(brush, 0, 0, 4, cloudBackupStatusPanel.Height);
+            };
+            cloudBackupStatusTitle.AutoSize = true;
+            cloudBackupStatusTitle.Font = new Font(Font.FontFamily, 9F, FontStyle.Bold);
+            cloudBackupStatusTitle.Location = new Point(13, 5);
+            cloudBackupStatusDetail.AutoEllipsis = true;
+            cloudBackupStatusDetail.ForeColor = Color.DimGray;
+            cloudBackupStatusDetail.Font = new Font(Font.FontFamily, 8F);
+            cloudBackupStatusDetail.SetBounds(13, 27, 620, 19);
+            cloudBackupStatusDetail.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+            cloudBackupSettingsLink.Text = L.T("設定…", "Settings…");
+            cloudBackupSettingsLink.AutoSize = true;
+            cloudBackupSettingsLink.LinkColor = Color.SteelBlue;
+            cloudBackupSettingsLink.Location = new Point(660, 16);
+            cloudBackupSettingsLink.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+            cloudBackupSettingsLink.LinkClicked += delegate { ShowCloudSettings(); };
+            cloudBackupStatusPanel.Controls.AddRange(new Control[] { cloudBackupStatusTitle, cloudBackupStatusDetail, cloudBackupSettingsLink });
+            cloudBackupStatusToolTip.SetToolTip(cloudBackupStatusPanel, L.T("每日備份會上傳 PDF 與原始 CSV；啟用定時測速時，也會一併備份測速資料。", "Daily backup uploads the PDF and raw CSV. Scheduled speed-test data is included when scheduled speed tests are enabled."));
+            cloudBackupStatusToolTip.SetToolTip(cloudBackupStatusDetail, cloudBackupStatusToolTip.GetToolTip(cloudBackupStatusPanel));
+
+            recentList.Location = new Point(25, 304);
+            recentList.Size = new Size(730, 234);
             recentList.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
             recentList.View = View.Details;
             recentList.FullRowSelect = true;
@@ -258,7 +293,7 @@ namespace NetCheck
             recentList.Columns.Add(L.T("延遲", "Latency"), 90);
             recentList.Columns.Add(L.T("檢測目標 / 說明", "Target / Details"), 365);
 
-            Controls.AddRange(new Control[] { title, versionLabel, stateLabel, intervalLabel, intervalBox, startButton, pauseButton, reportButton, dataButton, lastLabel, statsLabel, networkInfoLabel, recentList, exitButton, aboutButton, settingsButton, eventNoteButton });
+            Controls.AddRange(new Control[] { title, versionLabel, stateLabel, intervalLabel, intervalBox, startButton, pauseButton, reportButton, dataButton, lastLabel, statsLabel, networkInfoLabel, cloudBackupStatusPanel, recentList, exitButton, aboutButton, settingsButton, eventNoteButton });
 
             startButton.Click += delegate { if (!running) StartMonitoring(); };
             pauseButton.Click += delegate { TogglePause(); };
@@ -298,6 +333,11 @@ namespace NetCheck
             cloudManager = new CloudBackupManager(machineName, machineId);
             cloudManager.ConfigureViewerControl(ApplyViewerControl, GetViewerControlSnapshot);
             gmailManager = new GmailNotificationManager(machineName, machineId);
+            RefreshCloudBackupStatus();
+            cloudBackupStatusTimer = new System.Windows.Forms.Timer();
+            cloudBackupStatusTimer.Interval = 2000;
+            cloudBackupStatusTimer.Tick += delegate { RefreshCloudBackupStatus(); };
+            cloudBackupStatusTimer.Start();
         }
 
         private void StartMonitoring()
@@ -523,6 +563,37 @@ namespace NetCheck
         private void ShowCloudSettings()
         {
             using (var form = new CloudBackupForm(cloudManager)) form.ShowDialog(this);
+            RefreshCloudBackupStatus();
+        }
+
+        private void RefreshCloudBackupStatus()
+        {
+            if (IsDisposed) return;
+            bool connected = cloudManager != null && cloudManager.Connected;
+            bool inProgress = cloudManager != null && cloudManager.BackupInProgress;
+            TimeSpan schedule = cloudManager == null ? new TimeSpan(23, 55, 0) : cloudManager.ScheduleTime;
+            bool speedEnabled = monitorSettings != null && monitorSettings.SpeedTest != null && monitorSettings.SpeedTest.ScheduledEnabled;
+            string[] text = BuildCloudBackupStatusText(connected, inProgress, schedule, speedEnabled);
+            cloudBackupStatusTitle.Text = text[0];
+            cloudBackupStatusTitle.ForeColor = inProgress ? Color.DarkOrange : connected ? Color.SeaGreen : Color.DimGray;
+            cloudBackupStatusDetail.Text = text[1];
+            cloudBackupStatusPanel.Invalidate();
+        }
+
+        internal static string[] BuildCloudBackupStatusText(bool connected, bool inProgress, TimeSpan schedule, bool speedEnabled)
+        {
+            string title = L.T("Google Drive 備份：", "Google Drive Backup: ");
+            if (inProgress) title += L.T("備份中", "Backing up");
+            else title += connected ? L.T("已連接", "Connected") : L.T("未連接", "Not connected");
+
+            string daily = connected
+                ? L.T("每日 PDF＋CSV：開啟（", "Daily PDF + CSV: On (") + schedule.ToString(@"hh\:mm") + L.T("）", ")")
+                : L.T("每日 PDF＋CSV：關閉（尚未連接）", "Daily PDF + CSV: Off (not connected)");
+            string speed;
+            if (!connected) speed = L.T("定時測速資料備份：關閉（尚未連接）", "Scheduled speed-test backup: Off (not connected)");
+            else if (speedEnabled) speed = L.T("定時測速資料備份：開啟", "Scheduled speed-test backup: On");
+            else speed = L.T("定時測速資料備份：關閉（定時測速未啟用）", "Scheduled speed-test backup: Off (scheduled speed tests disabled)");
+            return new string[] { title, daily + "　｜　" + speed };
         }
 
         private void ShowGmailSettings()
@@ -611,6 +682,7 @@ namespace NetCheck
             checkIntervalSeconds = desired.MonitorIntervalSeconds;
             if (String.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("NETCHECK_MONITOR_SETTINGS"))) PortableSettingsStore.SaveCheckIntervalSeconds(checkIntervalSeconds);
             if (cloudManager != null) cloudManager.SaveSchedule(backupTime);
+            RefreshCloudBackupStatus();
             if (running)
             {
                 WriteMarker("VIEWER_SETTINGS_APPLIED", L.T("Viewer 遠端設定已套用；監控間隔 ", "Viewer remote settings applied; monitoring interval ") + checkIntervalSeconds + L.T(" 秒；資料備份時間 ", " seconds; data backup time ") + desired.BackupTime);
@@ -634,6 +706,7 @@ namespace NetCheck
             monitorSettings = updated;
             UpdatePowerProtection();
             RefreshSpeedSchedule();
+            RefreshCloudBackupStatus();
             if (!updated.AdvancedDiagnosticsEnabled) { lastAdvancedDiagnostic = null; lastAdvancedDiagnosticAt = DateTime.MinValue; }
             if (running)
             {
@@ -726,7 +799,7 @@ namespace NetCheck
                                 request.Method = "GET";
                                 request.Timeout = 5000;
                                 request.ReadWriteTimeout = 5000;
-                                request.UserAgent = "NetCheckMonitor/0.9.19";
+                                request.UserAgent = "NetCheckMonitor/0.9.20";
                                 request.AllowAutoRedirect = true;
                                 using (var response = (HttpWebResponse)request.GetResponse())
                                 {
@@ -1925,6 +1998,7 @@ namespace NetCheck
             }
             if (running && e.CloseReason == CloseReason.WindowsShutDown) PrepareForSystemRestart();
             else if (running) StopMonitoring(false);
+            if (cloudBackupStatusTimer != null) { cloudBackupStatusTimer.Stop(); cloudBackupStatusTimer.Dispose(); cloudBackupStatusTimer = null; }
             if (cloudManager != null) cloudManager.Dispose();
             if (gmailManager != null) gmailManager.Dispose();
             if (updateWaitTimer != null) { updateWaitTimer.Stop(); updateWaitTimer.Dispose(); updateWaitTimer = null; }
@@ -1940,7 +2014,7 @@ namespace NetCheck
 
     internal sealed class AboutForm : Form
     {
-        internal const string AppVersion = "0.9.19";
+        internal const string AppVersion = "0.9.20";
         internal const string Purpose = "可定時監控對外網路連線，紀錄斷線並產生圖文報表，並支援網路硬碟備份，PDF 下載，程式完全免費開源無廣告。";
         internal const string EnglishPurpose = "Scheduled monitoring of external Internet connectivity, outage logging, graphical reports, cloud-drive backup, and PDF downloads. Completely free, open source, and ad-free.";
         private const string GitHubProjectUrl = "https://github.com/ahui3c/NetCheckMonitor";

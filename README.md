@@ -6,15 +6,15 @@
 
 NetCheckMonitor（中文名稱：對外網路連線能力監控程式）是免費、開源、無廣告的 Windows 工具。它會定時檢查電腦是否能連上外部網路，長時間記錄斷線狀況，並產生圖形化 HTML 與 PDF 報表，適合家用網路障礙報修與連線品質佐證。
 
-目前版本：**0.9.19**
+目前版本：**0.9.20**
 
-## 0.9.19 更新簡述
+## 0.9.20 更新簡述
 
-- NetCheck Viewer 新增異常事件中心，可追蹤備份逾期、連線率、測速、遠端設定及 CSV 完整性問題。
-- Viewer 改用增量索引與資料夾同步事件，只解析新增或變更的 CSV，並定期完整校正。
-- 新增 7／30／90 天連線、延遲、測速、備份回傳與斷線熱點趨勢，支援多電腦疊加比較。
+- 監控程式首頁新增 Google Drive 備份狀態列，直接顯示連接、每日 PDF／CSV 與定時測速資料備份狀態。
+- NetCheck Viewer 0.3.1 新增首次使用說明，清楚解釋多電腦 Google Drive 備份流程、工具定位與非同步限制。
+- 新增 WinGet ZIP portable manifest 產生器、驗證測試與發行維護文件。
 
-完整內容請參閱 [0.9.19 更新說明](docs/RELEASE_NOTES_0.9.19.md)。
+完整內容請參閱 [0.9.20 更新說明](docs/RELEASE_NOTES_0.9.20.md)。
 
 ## 下載
 
@@ -22,6 +22,18 @@ NetCheckMonitor（中文名稱：對外網路連線能力監控程式）是免�
 - [下載 NetCheck Viewer Windows 可攜版](https://github.com/ahui3c/NetCheckMonitor/releases/latest/download/NetCheck_Viewer-Portable.zip)
 - 解壓縮後執行 `NetCheckMonitor.exe`，不需要安裝。
 - 系統需求：Windows 10／11、.NET Framework 4.8、Microsoft Edge（產生 PDF 使用）。
+
+### WinGet
+
+WinGet Community Repository 收錄完成後，可由 Windows 套件管理員安裝、升級與移除：
+
+```powershell
+winget install --id AHui3C.NetCheckMonitor --exact
+winget upgrade --id AHui3C.NetCheckMonitor --exact
+winget uninstall --id AHui3C.NetCheckMonitor --exact
+```
+
+發行與 manifest 維護方式請參閱 [WinGet 發行文件](docs/WINGET.md)。
 
 ## 主要功能
 

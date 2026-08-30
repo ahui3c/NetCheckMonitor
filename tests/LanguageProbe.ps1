@@ -39,6 +39,15 @@ try {
     $gmailText = @($gmail.Controls | ForEach-Object { $_.Text }) -join "`n"
     $settingsText = @($settings.Controls | ForEach-Object { $_.Text }) -join "`n"
     $eventNoteText = @($eventNote.Controls | ForEach-Object { $_.Text }) -join "`n"
+    $cloudBackupStatusTitle = $mainType.GetField('cloudBackupStatusTitle', $flags).GetValue($main)
+    $cloudBackupStatusDetail = $mainType.GetField('cloudBackupStatusDetail', $flags).GetValue($main)
+    $cloudBackupSettingsLink = $mainType.GetField('cloudBackupSettingsLink', $flags).GetValue($main)
+    $cloudStatusMethod = $mainType.GetMethod('BuildCloudBackupStatusText', [Reflection.BindingFlags]'Static,NonPublic')
+    $cloudConnectedText = @($cloudStatusMethod.Invoke($null, [object[]]@($true, $false, [TimeSpan]::Parse('21:30'), $true)))
+    $englishHomeCloudStatus = $cloudBackupStatusTitle.Text.Contains('Google Drive Backup: Not connected') -and
+        $cloudBackupStatusDetail.Text.Contains('Daily PDF + CSV: Off (not connected)') -and $cloudBackupStatusDetail.Text.Contains('Scheduled speed-test backup: Off') -and
+        $cloudBackupSettingsLink.Text -eq 'Settings…' -and $cloudConnectedText[0].Contains('Google Drive Backup: Connected') -and
+        $cloudConnectedText[1].Contains('Daily PDF + CSV: On (21:30)') -and $cloudConnectedText[1].Contains('Scheduled speed-test backup: On')
     $archiveType = $assembly.GetType('NetCheck.ArchiveReport', $true)
     $sessionType = $assembly.GetType('NetCheck.ArchiveReport+Session', $true)
     $session = [Activator]::CreateInstance($sessionType, $true)
@@ -62,13 +71,13 @@ try {
     $reportHtml = $buildHtml.Invoke($null, [object[]]@($sessions, [DateTime]::Today, [DateTime]::Today.AddDays(1), $true))
     $englishReport = $reportHtml.Contains("<html lang='en'>") -and $reportHtml.Contains('Daily Outage Statistics') -and $reportHtml.Contains('Outage Events') -and $reportHtml.Contains('Current Network Adapter') -and $reportHtml.Contains('Wi-Fi Signal') -and $reportHtml.Contains('Complete Daily Test Records') -and $reportHtml.Contains('Full Test Details') -and -not $reportHtml.Contains('每日斷線統計')
     $ok = $main.Text -eq 'NetCheckMonitor Network Monitor' -and
-        $mainText.Contains('Start') -and $mainText.Contains('Download PDF Report') -and $mainText.Contains('About') -and $mainText.Contains('Settings') -and $mainText.Contains('v0.9.19') -and
-        $about.Text -eq 'About NetCheckMonitor' -and $aboutText.Contains('Version 0.9.19') -and $aboutText.Contains('Scheduled monitoring') -and $aboutText.Contains('廖阿輝') -and $aboutText.Contains('Website:') -and $aboutText.Contains('https://ahui3c.com') -and $aboutText.Contains('GitHub project:') -and $aboutText.Contains('https://github.com/ahui3c/NetCheckMonitor') -and $aboutText.Contains('Online Update') -and
+        $mainText.Contains('Start') -and $mainText.Contains('Download PDF Report') -and $mainText.Contains('About') -and $mainText.Contains('Settings') -and $mainText.Contains('v0.9.20') -and
+        $about.Text -eq 'About NetCheckMonitor' -and $aboutText.Contains('Version 0.9.20') -and $aboutText.Contains('Scheduled monitoring') -and $aboutText.Contains('廖阿輝') -and $aboutText.Contains('Website:') -and $aboutText.Contains('https://ahui3c.com') -and $aboutText.Contains('GitHub project:') -and $aboutText.Contains('https://github.com/ahui3c/NetCheckMonitor') -and $aboutText.Contains('Online Update') -and
         $report.Text -eq 'Download NetCheckMonitor PDF Report' -and $reportText.Contains('All Saved Data') -and
         $cloud.Text -eq 'Google Drive Daily Backup' -and $cloudText.Contains('Sign in to Google Drive') -and
         $gmail.Text -eq 'Gmail Reports and Recovery Notifications' -and $gmailText.Contains('Sender and recipient are always the same signed-in Google account') -and $gmailText.Contains('Email daily monitoring and scheduled speed-test reports (when available)') -and $gmailText.Contains('Send a notification after the internet connection recovers') -and $gmailText.Contains('Send Test Email') -and
         $settings.Text -eq 'Monitoring Target Settings' -and $settingsText.Contains('Use built-in test targets (recommended)') -and $settingsText.Contains('The app automatically uses its default connectivity targets.') -and $settingsText.Contains('Use custom test targets') -and $settingsText.Contains('Target 3') -and $settingsText.Contains('Run advanced layered diagnostics after an HTTPS failure (optional)') -and $settingsText.Contains('Prevent the computer from sleeping while monitoring (recommended)') -and $settingsText.Contains('Block Windows shutdown or restart while monitoring (use the in-app exit button)') -and $settingsText.Contains('Start the app after Windows sign-in') -and $settingsText.Contains('Start monitoring automatically when the app opens') -and $settingsText.Contains('Interface language') -and $settingsText.Contains('Applied the next time the app starts') -and $settingsText.Contains('Export All Data Backup ZIP') -and $settingsText.Contains('Clear All Data') -and $settingsText.Contains('Rebuild Detail Reports') -and
-        $eventNote.Text -eq 'Add Event Note' -and $eventNoteText.Contains('Restarted modem') -and $eventNoteText.Contains('Restarted wireless router') -and $eventNoteText.Contains('Restarted computer') -and $eventNoteText.Contains('Rain') -and $eventNoteText.Contains('Thunder') -and $englishReport
+        $eventNote.Text -eq 'Add Event Note' -and $eventNoteText.Contains('Restarted modem') -and $eventNoteText.Contains('Restarted wireless router') -and $eventNoteText.Contains('Restarted computer') -and $eventNoteText.Contains('Rain') -and $eventNoteText.Contains('Thunder') -and $englishHomeCloudStatus -and $englishReport
     if (-not $ok) { throw 'English UI probe failed.' }
     Write-Output 'English UI probe passed.'
 }

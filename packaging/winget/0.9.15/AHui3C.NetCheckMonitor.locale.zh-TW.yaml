@@ -1,0 +1,25 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.defaultLocale.1.10.0.schema.json
+PackageIdentifier: AHui3C.NetCheckMonitor
+PackageVersion: 0.9.15
+PackageLocale: zh-TW
+Publisher: 廖阿輝
+PublisherUrl: https://ahui3c.com
+PublisherSupportUrl: https://github.com/ahui3c/NetCheckMonitor/issues
+PackageName: NetCheckMonitor
+PackageUrl: https://github.com/ahui3c/NetCheckMonitor
+License: MIT
+LicenseUrl: https://github.com/ahui3c/NetCheckMonitor/blob/main/LICENSE
+ShortDescription: 長時間監控 Windows 對外網路連線、斷線與延遲，並產生圖文報表。
+Description: |-
+  NetCheckMonitor 是免費、開源、無廣告的 Windows 網路監控工具。它會定時檢查對外連線，記錄斷線與延遲，產生 HTML、PDF 與 CSV 報表，並支援定時測速、Google Drive 備份及 Gmail 通知。
+Tags:
+- connectivity
+- internet
+- latency
+- monitoring
+- network
+- outage
+- report
+ReleaseNotesUrl: https://github.com/ahui3c/NetCheckMonitor/releases/tag/v0.9.15
+ManifestType: defaultLocale
+ManifestVersion: 1.10.0

@@ -1,0 +1,25 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.locale.1.10.0.schema.json
+PackageIdentifier: AHui3C.NetCheckMonitor
+PackageVersion: 0.9.15
+PackageLocale: en-US
+Publisher: AHui3C
+PublisherUrl: https://ahui3c.com
+PublisherSupportUrl: https://github.com/ahui3c/NetCheckMonitor/issues
+PackageName: NetCheckMonitor
+PackageUrl: https://github.com/ahui3c/NetCheckMonitor
+License: MIT
+LicenseUrl: https://github.com/ahui3c/NetCheckMonitor/blob/main/LICENSE
+ShortDescription: Monitor Windows Internet connectivity, outages, and latency over time and generate reports.
+Description: |-
+  NetCheckMonitor is a free, open-source, ad-free Windows utility that periodically checks Internet connectivity, records outages and latency, creates HTML, PDF, and CSV reports, and supports scheduled speed tests, Google Drive backups, and Gmail notifications.
+Tags:
+- connectivity
+- internet
+- latency
+- monitoring
+- network
+- outage
+- report
+ReleaseNotesUrl: https://github.com/ahui3c/NetCheckMonitor/releases/tag/v0.9.15
+ManifestType: locale
+ManifestVersion: 1.10.0
