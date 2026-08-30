@@ -6,19 +6,20 @@
 
 NetCheckMonitor（中文名稱：對外網路連線能力監控程式）是免費、開源、無廣告的 Windows 工具。它會定時檢查電腦是否能連上外部網路，長時間記錄斷線狀況，並產生圖形化 HTML 與 PDF 報表，適合家用網路障礙報修與連線品質佐證。
 
-目前版本：**0.9.15**
+目前版本：**0.9.16**
 
-## 0.9.15 更新簡述
+## 0.9.16 更新簡述
 
-- 安裝於 `Program Files` 等受保護目錄時，線上更新會在驗證完成後要求一次 Windows UAC 權限並自動完成替換與重新啟動。
-- UAC 更新使用安裝目錄內的可信任更新器，並再次驗證 manifest 與所有檔案雜湊。
-- 設定頁的維護按鈕改為正常字級，文字精簡為「清除全部資料」與「強制重製詳細報表」。
+- 新增 NetCheck Viewer，多台電腦的備份、連線率、斷線事件與定時測速可集中檢視。
+- Viewer 可透過監控程式建立的 Google Drive 控制檔，安全修改監控間隔與每日備份時間。
+- 控制設定只接受白名單與安全範圍，套用、拒絕及同步失敗都會寫回控制檔與 Delivery CSV。
 
-完整內容請參閱 [0.9.15 更新說明](docs/RELEASE_NOTES_0.9.15.md)。
+完整內容請參閱 [0.9.16 更新說明](docs/RELEASE_NOTES_0.9.16.md)。
 
 ## 下載
 
 - [下載 NetCheckMonitor Windows 可攜版](dist/NetCheckMonitor-Portable.zip)
+- [下載 NetCheck Viewer Windows 可攜版](https://github.com/ahui3c/NetCheckMonitor/releases/latest/download/NetCheck_Viewer-Portable.zip)
 - 解壓縮後執行 `NetCheckMonitor.exe`，不需要安裝。
 - 系統需求：Windows 10／11、.NET Framework 4.8、Microsoft Edge（產生 PDF 使用）。
 
@@ -45,6 +46,7 @@ NetCheckMonitor（中文名稱：對外網路連線能力監控程式）是免�
 - 設定可分別選擇「登入 Windows 後自動啟動程式」與「程式啟動後自動開始監控」。兩項同時啟用且由 Windows 登入自動啟動時，若有未完成工作階段會免確認直接接續並開始監控；手動啟動程式時仍會詢問是否接續。
 - 啟動時會檢查 NetCheckMonitor 是否已在執行；重複開啟不會建立第二份監控，而會顯示既有視窗。
 - Google Drive 每日定時備份完整 PDF 與原始 CSV 至 `Net_Check/電腦名稱` 資料夾，方便多台電腦共用同一個 Drive。
+- 搭配 NetCheck Viewer 可集中分析多台電腦的歷史備份；新版監控程式會建立白名單控制檔，讓 Viewer 安全修改監控間隔與每日備份時間，通常於 Google Drive 同步後 5 分鐘內套用。
 - 可選擇登入自己的 Gmail，每日把 PDF 與 CSV 報表寄給該登入帳戶，並在確認斷線後恢復連線時寄送通知；另提供測試郵件。寄件者與收件者固定為同一登入帳戶，不能寄給其他地址。
 - 啟用定時測速且當日有測速紀錄時，Drive 備份與 Gmail 日報會一併包含當日測速 HTML 報表及測速原始 CSV；沒有測速紀錄時仍正常處理原有網路監控報表。
 - Gmail 寄送與 Google Drive 備份的成功、失敗及略過結果會寫入獨立的 Delivery CSV，方便後續追蹤排程、重試與錯誤原因。

@@ -25,6 +25,7 @@ namespace NetCheck
         public string FolderId { get; set; }
         public string ComputerFolderId { get; set; }
         public string ComputerFolderName { get; set; }
+        public string ControlFileId { get; set; }
         public string Schedule { get; set; }
         public string LastBackupDay { get; set; }
     }
@@ -48,6 +49,10 @@ namespace NetCheck
         private string accessToken;
         private DateTime accessTokenExpires;
         private int backupRunning;
+        private int controlSyncRunning;
+        private DateTime lastControlPollUtc;
+        private Func<ViewerControlDesired, ViewerControlApplyResult> applyViewerControl;
+        private Func<ViewerControlDesired> getViewerControlSnapshot;
         private string lastStatus;
 
         public CloudBackupManager(string computerName, string computerId)
@@ -67,7 +72,7 @@ namespace NetCheck
                 else PortableSettingsStore.SaveCloudBackupSchedule(config.Schedule);
             }
             lastStatus = Connected ? L.T("Google Drive 已連接；等待每日備份。", "Google Drive is connected; waiting for the daily backup.") : L.T("尚未連接 Google Drive。", "Google Drive is not connected.");
-            scheduleTimer = new System.Threading.Timer(delegate { CheckSchedule(); }, null, 30000, 60000);
+            scheduleTimer = new System.Threading.Timer(delegate { CheckSchedule(); BeginViewerControlSync(false); }, null, 30000, 60000);
         }
 
         public bool Connected { get { lock (sync) return !String.IsNullOrEmpty(config.RefreshToken) && !String.IsNullOrEmpty(config.ClientId); } }
@@ -90,6 +95,41 @@ namespace NetCheck
         {
             lock (sync) { config.Schedule = value.ToString(@"hh\:mm"); SaveConfig(settingsPath, config); if (portableSettings) PortableSettingsStore.SaveCloudBackupSchedule(config.Schedule); lastStatus = L.T("每日備份時間已設為 ", "Daily backup time set to ") + config.Schedule + "."; }
         }
+        public void ConfigureViewerControl(Func<ViewerControlDesired, ViewerControlApplyResult> apply, Func<ViewerControlDesired> snapshot)
+        {
+            lock (sync)
+            {
+                applyViewerControl = apply;
+                getViewerControlSnapshot = snapshot;
+            }
+        }
+
+        public void BeginViewerControlSync(bool force)
+        {
+            if (!Connected) return;
+            lock (sync)
+            {
+                if (applyViewerControl == null || getViewerControlSnapshot == null) return;
+                if (!force && DateTime.UtcNow - lastControlPollUtc < TimeSpan.FromMinutes(5)) return;
+                lastControlPollUtc = DateTime.UtcNow;
+            }
+            if (Interlocked.Exchange(ref controlSyncRunning, 1) == 1) return;
+            ThreadPool.QueueUserWorkItem(delegate
+            {
+                try
+                {
+                    string token = GetAccessToken();
+                    string folder = EnsureFolder(token);
+                    SyncViewerControlCore(token, folder);
+                }
+                catch (Exception ex)
+                {
+                    DeliveryAuditLog.Record(machineName, machineId, "VIEWER_CONTROL", "SETTINGS_SYNC", "FAILED", "Error=" + ex.Message);
+                    lock (sync) lastStatus = L.T("Viewer 遠端設定同步失敗：", "Viewer remote settings sync failed: ") + ex.Message;
+                }
+                finally { Interlocked.Exchange(ref controlSyncRunning, 0); }
+            });
+        }
 
         public void Connect()
         {
@@ -107,6 +147,7 @@ namespace NetCheck
                 config.FolderId = null;
                 config.ComputerFolderId = null;
                 config.ComputerFolderName = null;
+                config.ControlFileId = null;
                 accessToken = result.AccessToken;
                 accessTokenExpires = DateTime.UtcNow.AddSeconds(Math.Max(60, result.ExpiresIn - 60));
                 SaveConfig(settingsPath, config);
@@ -114,6 +155,7 @@ namespace NetCheck
             }
             string token = GetAccessToken();
             EnsureFolder(token);
+            BeginViewerControlSync(true);
         }
 
         public void Disconnect()
@@ -178,6 +220,93 @@ namespace NetCheck
             }
         }
 
+        private ViewerControlDesired ViewerControlSnapshot()
+        {
+            Func<ViewerControlDesired> handler;
+            lock (sync) handler = getViewerControlSnapshot;
+            if (handler == null) return new ViewerControlDesired { MonitorIntervalSeconds = 60, BackupTime = ScheduleTime.ToString(@"hh\:mm") };
+            ViewerControlDesired value = ViewerControlProtocol.Clone(handler());
+            if (value.MonitorIntervalSeconds < ViewerControlProtocol.MinimumMonitorIntervalSeconds || value.MonitorIntervalSeconds > ViewerControlProtocol.MaximumMonitorIntervalSeconds) value.MonitorIntervalSeconds = 60;
+            TimeSpan parsed;
+            if (!TimeSpan.TryParseExact(value.BackupTime, @"hh\:mm", CultureInfo.InvariantCulture, out parsed)) value.BackupTime = ScheduleTime.ToString(@"hh\:mm");
+            return value;
+        }
+
+        private void SyncViewerControlCore(string token, string folderId)
+        {
+            string fileId = EnsureViewerControlFile(token, folderId);
+            string json = ApiRequest("GET", "https://www.googleapis.com/drive/v3/files/" + Uri.EscapeDataString(fileId) + "?alt=media", token, null, null);
+            ViewerControlDocument document = ViewerControlProtocol.Parse(json);
+            if (document.SchemaVersion != ViewerControlProtocol.SchemaVersion) throw new InvalidOperationException(L.T("Viewer 控制設定檔版本不相容。", "The Viewer control file version is not compatible."));
+            if (!String.Equals(document.MachineId, machineId, StringComparison.OrdinalIgnoreCase)) throw new InvalidOperationException(L.T("Viewer 控制設定檔不屬於這台電腦。", "The Viewer control file belongs to another computer."));
+            string desiredRevision = document.Desired == null ? null : document.Desired.Revision;
+            if (!String.IsNullOrWhiteSpace(desiredRevision) && document.Applied != null && String.Equals(document.Applied.Revision, desiredRevision, StringComparison.Ordinal)) return;
+
+            ViewerControlApplyResult result;
+            try
+            {
+                ViewerControlProtocol.Validate(document, machineId);
+                Func<ViewerControlDesired, ViewerControlApplyResult> handler;
+                lock (sync) handler = applyViewerControl;
+                if (handler == null) throw new InvalidOperationException(L.T("監控程式尚未準備好套用 Viewer 設定。", "The monitor is not ready to apply Viewer settings."));
+                result = handler(ViewerControlProtocol.Clone(document.Desired));
+                if (result == null) throw new InvalidOperationException(L.T("監控程式未回傳套用結果。", "The monitor did not return an apply result."));
+            }
+            catch (Exception ex)
+            {
+                ViewerControlDesired current = ViewerControlSnapshot();
+                result = new ViewerControlApplyResult { Success = false, Message = ex.Message, MonitorIntervalSeconds = current.MonitorIntervalSeconds, BackupTime = current.BackupTime };
+            }
+
+            document.MachineName = machineName;
+            document.Applied = new ViewerControlApplied
+            {
+                Revision = String.IsNullOrWhiteSpace(desiredRevision) ? "invalid-" + Guid.NewGuid().ToString("N") : desiredRevision,
+                AppliedAtUtc = DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture),
+                Status = result.Success ? "APPLIED" : "REJECTED",
+                Message = result.Message,
+                MonitorIntervalSeconds = result.MonitorIntervalSeconds,
+                BackupTime = result.BackupTime
+            };
+            UploadViewerControlDocument(token, fileId, document);
+            string audit = "Revision=" + document.Applied.Revision + ";MonitorIntervalSeconds=" + result.MonitorIntervalSeconds.ToString(CultureInfo.InvariantCulture) + ";BackupTime=" + result.BackupTime + ";Message=" + (result.Message ?? "");
+            DeliveryAuditLog.Record(machineName, machineId, "VIEWER_CONTROL", "SETTINGS_SYNC", result.Success ? "SUCCESS" : "REJECTED", audit);
+            lock (sync) lastStatus = result.Success
+                ? L.T("已套用 Viewer 遠端設定：監控間隔 ", "Viewer remote settings applied: monitoring interval ") + result.MonitorIntervalSeconds + L.T(" 秒，備份時間 ", " seconds, backup time ") + result.BackupTime + "."
+                : L.T("Viewer 遠端設定未套用：", "Viewer remote settings were not applied: ") + result.Message;
+        }
+
+        private string EnsureViewerControlFile(string token, string folderId)
+        {
+            string query = "name = '" + EscapeDriveQuery(ViewerControlProtocol.FileName) + "' and '" + EscapeDriveQuery(folderId) + "' in parents and trashed = false";
+            string listUrl = "https://www.googleapis.com/drive/v3/files?q=" + Uri.EscapeDataString(query) + "&spaces=drive&fields=files(id,name)&pageSize=10";
+            string fileId = FirstFileId(JsonObject(ApiRequest("GET", listUrl, token, null, null)));
+            if (String.IsNullOrEmpty(fileId))
+            {
+                ViewerControlDocument initial = ViewerControlProtocol.Create(machineName, machineId, ViewerControlSnapshot());
+                string boundary = "netcheck_control_" + Guid.NewGuid().ToString("N");
+                var metadata = new Dictionary<string, object>();
+                metadata["name"] = ViewerControlProtocol.FileName;
+                metadata["parents"] = new string[] { folderId };
+                byte[] content = Utf8(ViewerControlProtocol.Serialize(initial));
+                byte[] prefix = Utf8("--" + boundary + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" + Json(metadata) + "\r\n--" + boundary + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n");
+                byte[] suffix = Utf8("\r\n--" + boundary + "--\r\n");
+                byte[] body = new byte[prefix.Length + content.Length + suffix.Length];
+                Buffer.BlockCopy(prefix, 0, body, 0, prefix.Length);
+                Buffer.BlockCopy(content, 0, body, prefix.Length, content.Length);
+                Buffer.BlockCopy(suffix, 0, body, prefix.Length + content.Length, suffix.Length);
+                fileId = GetString(JsonObject(ApiRequest("POST", "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id", token, "multipart/related; boundary=" + boundary, body)), "id");
+                if (String.IsNullOrEmpty(fileId)) throw new InvalidOperationException(L.T("Google Drive 未回傳 Viewer 控制檔識別碼。", "Google Drive did not return the Viewer control file ID."));
+                DeliveryAuditLog.Record(machineName, machineId, "VIEWER_CONTROL", "CONTROL_FILE", "SUCCESS", "Created=Net_Check/" + SafeDriveFolderName(machineName) + "/" + ViewerControlProtocol.FileName);
+            }
+            lock (sync) { config.ControlFileId = fileId; SaveConfig(settingsPath, config); }
+            return fileId;
+        }
+
+        private static void UploadViewerControlDocument(string token, string fileId, ViewerControlDocument document)
+        {
+            ApiRequest("PATCH", "https://www.googleapis.com/upload/drive/v3/files/" + Uri.EscapeDataString(fileId) + "?uploadType=media", token, "application/json; charset=UTF-8", Utf8(ViewerControlProtocol.Serialize(document)));
+        }
         private string GetAccessToken()
         {
             lock (sync)
@@ -407,12 +536,12 @@ namespace NetCheck
 
         public static bool RunStorageSelfTest(string path)
         {
-            try { var c = NewConfig(); c.ClientId = "test-client"; c.RefreshToken = "test-refresh"; c.FolderId = "root-folder"; c.ComputerFolderId = "computer-folder"; c.ComputerFolderName = "OFFICE-PC"; c.Schedule = "21:30"; SaveConfig(path, c); CloudConfig loaded = LoadConfig(path); return loaded != null && loaded.ClientId == c.ClientId && loaded.RefreshToken == c.RefreshToken && loaded.FolderId == c.FolderId && loaded.ComputerFolderId == c.ComputerFolderId && loaded.ComputerFolderName == c.ComputerFolderName && loaded.Schedule == c.Schedule; } finally { try { if (File.Exists(path)) File.Delete(path); } catch { } }
+            try { var c = NewConfig(); c.ClientId = "test-client"; c.RefreshToken = "test-refresh"; c.FolderId = "root-folder"; c.ComputerFolderId = "computer-folder"; c.ComputerFolderName = "OFFICE-PC"; c.ControlFileId = "control-file"; c.Schedule = "21:30"; SaveConfig(path, c); CloudConfig loaded = LoadConfig(path); return loaded != null && loaded.ClientId == c.ClientId && loaded.RefreshToken == c.RefreshToken && loaded.FolderId == c.FolderId && loaded.ComputerFolderId == c.ComputerFolderId && loaded.ComputerFolderName == c.ComputerFolderName && loaded.ControlFileId == c.ControlFileId && loaded.Schedule == c.Schedule; } finally { try { if (File.Exists(path)) File.Delete(path); } catch { } }
         }
 
         private static string ApiRequest(string method, string url, string token, string contentType, byte[] body)
         {
-            var request = (HttpWebRequest)WebRequest.Create(url); request.Method = method; request.Timeout = 60000; request.ReadWriteTimeout = 60000; request.UserAgent = "NetCheckMonitor/0.9.15"; request.Headers[HttpRequestHeader.Authorization] = "Bearer " + token;
+            var request = (HttpWebRequest)WebRequest.Create(url); request.Method = method; request.Timeout = 60000; request.ReadWriteTimeout = 60000; request.UserAgent = "NetCheckMonitor/0.9.16"; request.Headers[HttpRequestHeader.Authorization] = "Bearer " + token;
             if (body != null) { request.ContentType = contentType; request.ContentLength = body.Length; using (Stream stream = request.GetRequestStream()) stream.Write(body, 0, body.Length); }
             try { using (var response = (HttpWebResponse)request.GetResponse()) using (var reader = new StreamReader(response.GetResponseStream())) return reader.ReadToEnd(); }
             catch (WebException ex) { throw new InvalidOperationException(ReadWebError(ex)); }

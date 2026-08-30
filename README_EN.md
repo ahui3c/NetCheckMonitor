@@ -6,19 +6,20 @@
 
 NetCheckMonitor is a free, open-source, ad-free Windows utility that periodically checks whether a computer can reach the public Internet. It records outages over hours or days and creates graphical HTML and PDF reports suitable for troubleshooting home Internet service or documenting connection problems for an ISP.
 
-Current version: **0.9.15**
+Current version: **0.9.16**
 
-## What's new in 0.9.15
+## What's new in 0.9.16
 
-- Online update now requests one Windows UAC approval after verification when installed under a protected folder such as `Program Files`.
-- Elevated updates use the trusted updater already in the install folder and revalidate the manifest and every payload hash.
-- Settings maintenance buttons now use the normal font size with shorter Clear All Data and Rebuild Detail Reports labels.
+- Adds NetCheck Viewer for centralized analysis of multi-computer backups, availability, outages, and scheduled speed tests.
+- Viewer can safely request monitoring-interval and daily-backup-time changes through a control file created by NetCheckMonitor in Google Drive.
+- Only allowlisted values are accepted; applied, rejected, and failed synchronization outcomes are written back to the control file and Delivery CSV.
 
-See the complete [0.9.15 release notes](docs/RELEASE_NOTES_0.9.15.md).
+See the complete [0.9.16 release notes](docs/RELEASE_NOTES_0.9.16.md).
 
 ## Download
 
 - [Download the portable Windows package](dist/NetCheckMonitor-Portable.zip).
+- [Download NetCheck Viewer for Windows](https://github.com/ahui3c/NetCheckMonitor/releases/latest/download/NetCheck_Viewer-Portable.zip).
 - Extract it and run `NetCheckMonitor.exe`; no installation is required.
 - Requirements: Windows 10 or 11, .NET Framework 4.8, and Microsoft Edge for PDF generation.
 - The About page includes one-click online update. It downloads, verifies, replaces, and restarts to the latest public release automatically. When the program is under a protected folder such as `Program Files`, Windows asks once for UAC administrator permission after verification.
@@ -46,6 +47,7 @@ See the complete [0.9.15 release notes](docs/RELEASE_NOTES_0.9.15.md).
 - Settings can independently launch NetCheckMonitor after Windows sign-in and start monitoring automatically when the app opens. When both are enabled and Windows launches the app at sign-in, an unfinished session resumes automatically without a confirmation dialog; manual launches still ask first.
 - Startup checks whether NetCheckMonitor is already running. A duplicate launch shows the existing window instead of creating a second monitoring process.
 - Performs scheduled daily Google Drive backups of the complete PDF and raw CSV to `Net_Check/computer name`, keeping multiple computers organized in one Drive.
+- NetCheck Viewer centrally analyzes multiple computers and can safely request monitoring-interval and daily-backup-time changes through an allowlisted control file, normally applied within five minutes after Google Drive synchronization.
 - Optionally signs in to Gmail to email the daily PDF and CSV report to that same signed-in account, send a recovery notice after a confirmed outage, and send a test message. Sender and recipient are fixed to the same account.
 - When scheduled speed testing is enabled and that day has speed-test records, Drive backup and Gmail delivery also include a daily speed-test HTML report and raw speed-test CSV. The normal monitoring report still succeeds on days without speed-test data.
 - Gmail delivery and Google Drive backup success, failure, and skipped outcomes are written to a separate Delivery CSV for schedule, retry, and error tracking.

@@ -66,7 +66,7 @@ $aboutButtonLayout = $aboutButton.Text -eq '關於' -and $aboutButton.Width -le 
 $settingsButtonLayout = $settingsButton.Text -eq '設定' -and $settingsButton.Width -le 90 -and $settingsButton.Top -ge 495
 $pauseButton = $type.GetField('pauseButton', $flags).GetValue($form)
 $eventNoteButtonLayout = $eventNoteButton.Text -eq '事件註記' -and $eventNoteButton.Height -eq $pauseButton.Height -and $eventNoteButton.Top -eq $pauseButton.Top -and $eventNoteButton.Left -gt $pauseButton.Right -and ($eventNoteButton.Left - $pauseButton.Right) -le 12
-$homeVersionLabel = $versionLabel.Text -eq 'v0.9.15' -and $versionLabel.Font.Size -le 8.5 -and $versionLabel.ForeColor -eq [Drawing.Color]::DarkGray
+$homeVersionLabel = $versionLabel.Text -eq 'v0.9.16' -and $versionLabel.Font.Size -le 8.5 -and $versionLabel.ForeColor -eq [Drawing.Color]::DarkGray
 $monitorSettingsType = $assembly.GetType('NetCheck.MonitorSettingsStore', $true)
 $monitorSettingsStorageMethod = $monitorSettingsType.GetMethod('RunStorageSelfTest', [Reflection.BindingFlags]'Static,Public')
 $monitorSettingsStorage = $monitorSettingsStorageMethod.Invoke($null, [object[]]@($env:NETCHECK_MONITOR_SETTINGS))
@@ -140,9 +140,9 @@ $aboutFormType = $assembly.GetType('NetCheck.AboutForm', $true)
 $aboutForm = [Activator]::CreateInstance($aboutFormType)
 $checkVersionButton = $aboutFormType.GetField('checkVersionButton', $flags).GetValue($aboutForm)
 $isNewerVersionMethod = $aboutFormType.GetMethod('IsNewerVersion', [Reflection.BindingFlags]'Static,NonPublic')
-$versionComparison = $isNewerVersionMethod.Invoke($null, @('v0.9.16')) -and -not $isNewerVersionMethod.Invoke($null, @('v0.9.15')) -and -not $isNewerVersionMethod.Invoke($null, @('v0.9.14'))
+$versionComparison = $isNewerVersionMethod.Invoke($null, @('v0.9.17')) -and -not $isNewerVersionMethod.Invoke($null, @('v0.9.16')) -and -not $isNewerVersionMethod.Invoke($null, @('v0.9.15'))
 $aboutText = @($aboutForm.Controls | ForEach-Object { $_.Text }) -join "`n"
-$aboutPageContent = $aboutForm.Text -eq '關於 NetCheckMonitor' -and $aboutText.Contains('NetCheckMonitor') -and $aboutText.Contains('版本 0.9.15') -and $aboutText.Contains('可定時監控對外網路連線，紀錄斷線並產生圖文報表，並支援網路硬碟備份，PDF 下載，程式完全免費開源無廣告。') -and $aboutText.Contains('廖阿輝') -and $aboutText.Contains('chehui@gmail.com') -and $aboutText.Contains('https://ahui3c.com') -and $aboutText.Contains('https://github.com/ahui3c/NetCheckMonitor') -and $checkVersionButton.Text -eq '線上更新'
+$aboutPageContent = $aboutForm.Text -eq '關於 NetCheckMonitor' -and $aboutText.Contains('NetCheckMonitor') -and $aboutText.Contains('版本 0.9.16') -and $aboutText.Contains('可定時監控對外網路連線，紀錄斷線並產生圖文報表，並支援網路硬碟備份，PDF 下載，程式完全免費開源無廣告。') -and $aboutText.Contains('廖阿輝') -and $aboutText.Contains('chehui@gmail.com') -and $aboutText.Contains('https://ahui3c.com') -and $aboutText.Contains('https://github.com/ahui3c/NetCheckMonitor') -and $checkVersionButton.Text -eq '線上更新'
 $aboutLabels = @($aboutForm.Controls | Where-Object { $_ -is [Windows.Forms.Label] })
 $aboutLinks = @($aboutForm.Controls | Where-Object { $_ -is [Windows.Forms.LinkLabel] })
 $aboutWebsiteLink = @($aboutLinks | Where-Object { $_.Text -eq 'https://ahui3c.com' })
@@ -151,7 +151,7 @@ $aboutUrlLinkScope = [bool]($aboutLabels | Where-Object { $_.Text -eq '網站：
     [bool]($aboutLabels | Where-Object { $_.Text -eq 'GitHub 專案：' }) -and
     $aboutWebsiteLink.Count -eq 1 -and $aboutWebsiteLink[0].LinkArea.Start -eq 0 -and $aboutWebsiteLink[0].LinkArea.Length -eq $aboutWebsiteLink[0].Text.Length -and
     $aboutGitHubLink.Count -eq 1 -and $aboutGitHubLink[0].LinkArea.Start -eq 0 -and $aboutGitHubLink[0].LinkArea.Length -eq $aboutGitHubLink[0].Text.Length
-$programIdentity = $form.Text -eq '對外網路連線能力監控程式' -and $assembly.GetName().Version.ToString() -eq '0.9.15.0'
+$programIdentity = $form.Text -eq '對外網路連線能力監控程式' -and $assembly.GetName().Version.ToString() -eq '0.9.16.0'
 $applicationRecoveryType = $assembly.GetType('NetCheck.ApplicationRecovery', $true)
 $applicationRestartRegistered = $null -ne $applicationRecoveryType.GetMethod('Register', [Reflection.BindingFlags]'Static,Public')
 $embeddedIcon = [Drawing.Icon]::ExtractAssociatedIcon((Join-Path $testRoot 'NetCheckMonitor.exe'))
@@ -223,7 +223,7 @@ $rows = Import-Csv -LiteralPath $csv.FullName
 $checkTimes = @($rows | Where-Object Type -eq 'CHECK' | ForEach-Object { [DateTime]$_.Timestamp } | Sort-Object)
 $fastRetrySpacing = $false
 for ($i = 1; $i -lt $checkTimes.Count; $i++) { $seconds = ($checkTimes[$i] - $checkTimes[$i - 1]).TotalSeconds; if ($seconds -ge 3 -and $seconds -le 8) { $fastRetrySpacing = $true } }
-$sourceText = (Get-Content -LiteralPath (Join-Path $root 'NetCheck.cs') -Raw) + "`n" + (Get-Content -LiteralPath (Join-Path $root 'UpdateService.cs') -Raw)
+$sourceText = (Get-Content -LiteralPath (Join-Path $root 'NetCheck.cs') -Raw) + "`n" + (Get-Content -LiteralPath (Join-Path $root 'UpdateService.cs') -Raw) + "`n" + (Get-Content -LiteralPath (Join-Path $root 'SessionRecovery.cs') -Raw)
 $closeReminderText = $sourceText.Contains('按下右上角 X 只會將程式縮小到系統匣') -and $sourceText.Contains('主畫面右下角的「關閉程式並停止監控」按鈕') -and $sourceText.Contains('This message is shown only once.')
 $boundedOutageBackoff = $sourceText -match 'consecutiveFailures\s*<=\s*FastRetryLimit' -and
     $sourceText -match 'Math\.Min\(checkIntervalSeconds,\s*OutageBackoffSeconds\)'

@@ -13,6 +13,8 @@ try {
     $protectedStorage = $managerType.GetMethod('RunStorageSelfTest', $publicStatic).Invoke($null, [object[]]@($storagePath))
     $computerFolder = $managerType.GetMethod('RunComputerFolderSelfTest', $publicStatic).Invoke($null, @())
     $artifactContentTypes = $managerType.GetMethod('RunArtifactContentTypeSelfTest', $publicStatic).Invoke($null, @())
+    $controlType = $assembly.GetType('NetCheck.ViewerControlProtocol', $true)
+    $controlProtocol = $controlType.GetMethod('RunSelfTest', [Reflection.BindingFlags]'Static,NonPublic').Invoke($null, @())
 
     $manager = [Activator]::CreateInstance($managerType, [object[]]@('OFFICE-PC', 'A1B2C3D4'))
     $formType = $assembly.GetType('NetCheck.CloudBackupForm', $true)
@@ -25,9 +27,10 @@ try {
         ComputerFolder = [bool]$computerFolder
         ComputerFolderUi = [bool]$computerFolderUi
         ArtifactContentTypes = [bool]$artifactContentTypes
+        ViewerControlProtocol = [bool]$controlProtocol
     } | Format-List
 
-    if (-not $protectedStorage -or -not $computerFolder -or -not $computerFolderUi -or -not $artifactContentTypes) {
+    if (-not $protectedStorage -or -not $computerFolder -or -not $computerFolderUi -or -not $artifactContentTypes -or -not $controlProtocol) {
         throw 'Cloud backup probe failed.'
     }
 }

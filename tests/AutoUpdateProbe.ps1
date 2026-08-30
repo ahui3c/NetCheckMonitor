@@ -19,8 +19,8 @@ try {
     [string]$digest = 'sha256:' + [string](Get-FileHash -LiteralPath $packagePath -Algorithm SHA256).Hash.ToLowerInvariant()
     $validRoot = Join-Path $testRoot 'valid'
     New-Item -ItemType Directory -Path $validRoot | Out-Null
-    $validated = $method.Invoke($null, [object[]]@([string]$packagePath, [string]$digest, [string]'v0.9.15', [string]'https://example.invalid/release', [string]$validRoot))
-    $validPackage = $validated.Version -eq '0.9.15' -and
+    $validated = $method.Invoke($null, [object[]]@([string]$packagePath, [string]$digest, [string]'v0.9.16', [string]'https://example.invalid/release', [string]$validRoot))
+    $validPackage = $validated.Version -eq '0.9.16' -and
         (Test-Path -LiteralPath (Join-Path $validated.ExtractDirectory 'NetCheckMonitor.exe')) -and
         (Test-Path -LiteralPath (Join-Path $validated.ExtractDirectory 'NetCheckUpdater.exe'))
 
@@ -29,7 +29,7 @@ try {
         $badRoot = Join-Path $testRoot 'bad-digest'
         New-Item -ItemType Directory -Path $badRoot | Out-Null
         [string]$badDigest = 'sha256:' + (('0' * 64) -join '')
-        [void]$method.Invoke($null, [object[]]@([string]$packagePath, [string]$badDigest, [string]'v0.9.15', [string]'', [string]$badRoot))
+        [void]$method.Invoke($null, [object[]]@([string]$packagePath, [string]$badDigest, [string]'v0.9.16', [string]'', [string]$badRoot))
     } catch { $wrongDigestRejected = $null -ne $_.Exception.InnerException -and $_.Exception.InnerException.Message -like '*digest*' }
 
     $maliciousZip = Join-Path $testRoot 'malicious.zip'
@@ -47,7 +47,7 @@ try {
     try {
         $zipRoot = Join-Path $testRoot 'zip-slip'
         New-Item -ItemType Directory -Path $zipRoot | Out-Null
-        [void]$method.Invoke($null, [object[]]@([string]$maliciousZip, [string]$maliciousDigest, [string]'v0.9.15', [string]'', [string]$zipRoot))
+        [void]$method.Invoke($null, [object[]]@([string]$maliciousZip, [string]$maliciousDigest, [string]'v0.9.16', [string]'', [string]$zipRoot))
     } catch { $zipSlipRejected = $null -ne $_.Exception.InnerException -and $_.Exception.InnerException.Message -like '*Unsafe path*' }
     $escapedFileAbsent = -not (Test-Path -LiteralPath (Join-Path $testRoot 'escaped.txt'))
 

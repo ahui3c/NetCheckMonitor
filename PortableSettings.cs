@@ -12,6 +12,7 @@ namespace NetCheck
         public bool LegacyMigrationCompleted { get; set; }
         public string Language { get; set; }
         public bool? CloseToTrayNoticeShown { get; set; }
+        public int CheckIntervalSeconds { get; set; }
         public string CloudBackupSchedule { get; set; }
         public MonitorTargetSettings Monitor { get; set; }
     }
@@ -95,6 +96,22 @@ namespace NetCheck
         internal static void SaveCloudBackupSchedule(string schedule)
         {
             Update(delegate (PortableAppSettings value) { value.CloudBackupSchedule = schedule; });
+        }
+
+        internal static int LoadCheckIntervalSeconds()
+        {
+            lock (Sync)
+            {
+                EnsureMigrationLocked();
+                int value = ReadSettings(SettingsPath).CheckIntervalSeconds;
+                return value < 10 || value > 3600 ? 60 : value;
+            }
+        }
+
+        internal static void SaveCheckIntervalSeconds(int seconds)
+        {
+            if (seconds < 10 || seconds > 3600) throw new ArgumentOutOfRangeException("seconds");
+            Update(delegate (PortableAppSettings value) { value.CheckIntervalSeconds = seconds; });
         }
 
         internal static void EnsureMigration()

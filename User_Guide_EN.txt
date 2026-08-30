@@ -1,7 +1,7 @@
 NetCheckMonitor Network Connection Monitor (Portable Windows Edition)
 ===================================================================
 
-Version 0.9.15
+Version 0.9.16
 
 Interface language
 - On first launch, choose Traditional Chinese or English. The choice is saved and the prompt is not shown again.
@@ -70,6 +70,11 @@ Google Drive backup
 - The app requests only drive.file access.
 - Windows DPAPI encrypts the refresh token for the current Windows account.
 - The program must remain running for an on-time backup.
+NetCheck Viewer remote settings
+- After Drive is connected, NetCheckMonitor creates NetCheck_Control.json in this computer’s backup folder.
+- After Google Drive for desktop synchronizes it, Viewer can request a 10-3600 second monitoring interval and a 00:00-23:59 daily backup time.
+- The monitor checks every five minutes and writes the applied values, time, and applied or rejected result back to the control file and Delivery CSV.
+- The control file cannot send commands, executables, paths, or arbitrary URLs.
 
 Gmail daily reports and recovery notifications
 1. Open Settings > Gmail Report & Notification Settings.

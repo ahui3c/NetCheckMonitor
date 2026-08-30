@@ -40,8 +40,10 @@ try {
         $monitorType.GetMethod('Save', [Reflection.BindingFlags]'Static,Public').Invoke($null, $monitorArgs)
         $scheduleArgs = [object[]]::new(1); $scheduleArgs[0] = [string]'21:30'
         $type.GetMethod('SaveCloudBackupSchedule', $flags).Invoke($null, $scheduleArgs)
+        $intervalArgs = [object[]]::new(1); $intervalArgs[0] = [int]90
+        $type.GetMethod('SaveCheckIntervalSeconds', $flags).Invoke($null, $intervalArgs)
         $unified = [IO.File]::ReadAllText($env:NETCHECK_PORTABLE_SETTINGS)
-        $unifiedOk = $unified.Contains('"Language":"en-US"') -and $unified.Contains('"CloseToTrayNoticeShown":true') -and $unified.Contains('"AutoStartMonitoring":true') -and $unified.Contains('"CloudBackupSchedule":"21:30"')
+        $unifiedOk = $unified.Contains('"Language":"en-US"') -and $unified.Contains('"CloseToTrayNoticeShown":true') -and $unified.Contains('"AutoStartMonitoring":true') -and $unified.Contains('"CloudBackupSchedule":"21:30"') -and $unified.Contains('"CheckIntervalSeconds":90')
     }
     finally {
         $env:NETCHECK_PORTABLE_SETTINGS = $oldPortable

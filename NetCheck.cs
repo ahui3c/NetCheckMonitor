@@ -18,8 +18,8 @@ using Microsoft.Win32;
 [assembly: AssemblyProduct("NetCheckMonitor")]
 [assembly: AssemblyDescription("Internet connection monitoring and outage reporting")]
 [assembly: AssemblyCompany("廖阿輝")]
-[assembly: AssemblyVersion("0.9.15.0")]
-[assembly: AssemblyFileVersion("0.9.15.0")]
+[assembly: AssemblyVersion("0.9.16.0")]
+[assembly: AssemblyFileVersion("0.9.16.0")]
 
 namespace NetCheck
 {
@@ -269,7 +269,7 @@ namespace NetCheck
             settingsButton.Click += delegate { ShowMonitorSettings(); };
             eventNoteButton.Click += delegate { ShowEventNoteDialog(); };
             FormClosing += OnFormClosing;
-            Shown += delegate { BeginInvoke((MethodInvoker)HandleStartupMonitoring); };
+            Shown += delegate { BeginInvoke((MethodInvoker)HandleStartupMonitoring); if (cloudManager != null) cloudManager.BeginViewerControlSync(true); };
             Resize += delegate { if (WindowState == FormWindowState.Minimized) HideToTray(); };
 
             neutralTrayIcon = (Icon)this.Icon.Clone();
@@ -290,8 +290,13 @@ namespace NetCheck
             reportButton.Enabled = !String.IsNullOrEmpty(reportPath);
             monitorSettings = MonitorSettingsStore.Load();
             if (String.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("NETCHECK_MONITOR_SETTINGS")))
+            {
+                intervalBox.Value = Math.Max(intervalBox.Minimum, Math.Min(intervalBox.Maximum, PortableSettingsStore.LoadCheckIntervalSeconds()));
+                checkIntervalSeconds = (int)intervalBox.Value;
                 try { AutoStartManager.SetEnabled(monitorSettings.AutoStartWindows); } catch { }
+            }
             cloudManager = new CloudBackupManager(machineName, machineId);
+            cloudManager.ConfigureViewerControl(ApplyViewerControl, GetViewerControlSnapshot);
             gmailManager = new GmailNotificationManager(machineName, machineId);
         }
 
@@ -309,6 +314,7 @@ namespace NetCheck
             ResetOutageTracking();
             sessionStart = DateTime.Now;
             checkIntervalSeconds = (int)intervalBox.Value;
+            if (String.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("NETCHECK_MONITOR_SETTINGS"))) PortableSettingsStore.SaveCheckIntervalSeconds(checkIntervalSeconds);
             EnsureMachineIdentity();
             monitorSettings = MonitorSettingsStore.Load();
             activeTestUrls = MonitorSettingsStore.GetEffectiveTargets(monitorSettings, TestUrls);
@@ -581,6 +587,45 @@ namespace NetCheck
             AddRecent(note.Time, L.T("事件", "Event"), "—", note.Text, Color.MediumPurple);
         }
 
+        private ViewerControlDesired GetViewerControlSnapshot()
+        {
+            if (InvokeRequired) return (ViewerControlDesired)Invoke(new Func<ViewerControlDesired>(GetViewerControlSnapshot));
+            return new ViewerControlDesired
+            {
+                MonitorIntervalSeconds = checkIntervalSeconds,
+                BackupTime = cloudManager == null ? "23:55" : cloudManager.ScheduleTime.ToString(@"hh\:mm")
+            };
+        }
+
+        private ViewerControlApplyResult ApplyViewerControl(ViewerControlDesired desired)
+        {
+            if (InvokeRequired) return (ViewerControlApplyResult)Invoke(new Func<ViewerControlDesired, ViewerControlApplyResult>(ApplyViewerControl), desired);
+            if (desired == null) throw new ArgumentNullException("desired");
+            TimeSpan backupTime;
+            if (desired.MonitorIntervalSeconds < ViewerControlProtocol.MinimumMonitorIntervalSeconds || desired.MonitorIntervalSeconds > ViewerControlProtocol.MaximumMonitorIntervalSeconds)
+                throw new InvalidOperationException(L.T("監控間隔必須介於 10 到 3600 秒。", "The monitoring interval must be between 10 and 3600 seconds."));
+            if (!TimeSpan.TryParseExact(desired.BackupTime, @"hh\:mm", CultureInfo.InvariantCulture, out backupTime) || backupTime.TotalHours >= 24)
+                throw new InvalidOperationException(L.T("資料備份時間必須是 00:00 到 23:59。", "The backup time must be between 00:00 and 23:59."));
+
+            intervalBox.Value = desired.MonitorIntervalSeconds;
+            checkIntervalSeconds = desired.MonitorIntervalSeconds;
+            if (String.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("NETCHECK_MONITOR_SETTINGS"))) PortableSettingsStore.SaveCheckIntervalSeconds(checkIntervalSeconds);
+            if (cloudManager != null) cloudManager.SaveSchedule(backupTime);
+            if (running)
+            {
+                WriteMarker("VIEWER_SETTINGS_APPLIED", L.T("Viewer 遠端設定已套用；監控間隔 ", "Viewer remote settings applied; monitoring interval ") + checkIntervalSeconds + L.T(" 秒；資料備份時間 ", " seconds; data backup time ") + desired.BackupTime);
+                PersistSessionState();
+                if (!paused && timer != null && Interlocked.CompareExchange(ref checking, 0, 0) == 0)
+                    timer.Change(checkIntervalSeconds * 1000, Timeout.Infinite);
+            }
+            return new ViewerControlApplyResult
+            {
+                Success = true,
+                Message = L.T("設定已套用；下一次一般監控週期與後續每日備份將使用新值。", "Settings applied. The next regular monitoring cycle and subsequent daily backups will use the new values."),
+                MonitorIntervalSeconds = checkIntervalSeconds,
+                BackupTime = backupTime.ToString(@"hh\:mm")
+            };
+        }
         private bool ApplyMonitorSettings(MonitorTargetSettings updated)
         {
             if (updated == null) throw new ArgumentNullException("updated");
@@ -681,7 +726,7 @@ namespace NetCheck
                                 request.Method = "GET";
                                 request.Timeout = 5000;
                                 request.ReadWriteTimeout = 5000;
-                                request.UserAgent = "NetCheckMonitor/0.9.15";
+                                request.UserAgent = "NetCheckMonitor/0.9.16";
                                 request.AllowAutoRedirect = true;
                                 using (var response = (HttpWebResponse)request.GetResponse())
                                 {
@@ -1895,7 +1940,7 @@ namespace NetCheck
 
     internal sealed class AboutForm : Form
     {
-        internal const string AppVersion = "0.9.15";
+        internal const string AppVersion = "0.9.16";
         internal const string Purpose = "可定時監控對外網路連線，紀錄斷線並產生圖文報表，並支援網路硬碟備份，PDF 下載，程式完全免費開源無廣告。";
         internal const string EnglishPurpose = "Scheduled monitoring of external Internet connectivity, outage logging, graphical reports, cloud-drive backup, and PDF downloads. Completely free, open source, and ad-free.";
         private const string GitHubProjectUrl = "https://github.com/ahui3c/NetCheckMonitor";
