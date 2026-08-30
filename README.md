@@ -35,6 +35,44 @@ winget uninstall --id AHui3C.NetCheckMonitor --exact
 
 發行與 manifest 維護方式請參閱 [WinGet 發行文件](docs/WINGET.md)。
 
+## NetCheckMonitor 主程式畫面
+
+### 即時監控與備份狀態
+
+首頁會即時顯示目前連線、檢查統計、網路介面與最近紀錄。Google Drive 資訊列可直接確認帳號是否連接、每日 PDF／CSV 備份時間，以及定時測速資料是否會一併備份。
+
+<p align="center">
+  <img src="docs/images/netcheckmonitor-main.png" alt="NetCheckMonitor v0.9.20 主程式即時監控與 Google Drive 備份狀態" width="780">
+</p>
+
+| Google Drive 每日備份設定 | 多日歷史詳細報表 |
+| --- | --- |
+| <img src="docs/images/netcheckmonitor-google-drive.png" alt="NetCheckMonitor Google Drive 每日備份設定" width="520"> | <img src="docs/images/netcheckmonitor-history-report.jpg" alt="NetCheckMonitor 多日歷史詳細報表" width="620"> |
+| 登入自己的 Google 帳號，設定每日 PDF／CSV 備份時間；不同電腦會分別存入自己的子資料夾。 | 彙整不同監控工作階段，顯示連線率、斷線時間、延遲、每日狀態與完整測試紀錄。 |
+
+### 定時測速趨勢
+
+啟用選用的定時測速後，可用獨立報表檢視下載、上傳、延遲、Jitter、每日平均與測試流量；測速資料也能隨 Google Drive 備份與 Gmail 日報一併處理。
+
+<p align="center">
+  <img src="docs/images/netcheckmonitor-speed-report.jpg" alt="NetCheckMonitor 定時測速趨勢報表" width="1000">
+</p>
+
+## 適合使用的情境
+
+<table>
+  <tr>
+    <td width="33%"><img src="docs/images/netcheck-scenario-monitoring.jpg" alt="夜間長時間網路監控情境"></td>
+    <td width="33%"><img src="docs/images/netcheck-scenario-cloud.jpg" alt="Google Drive 與 Gmail 雲端備份通知情境"></td>
+    <td width="33%"><img src="docs/images/netcheck-scenario-reports.jpg" alt="查看網路品質報表與報修佐證情境"></td>
+  </tr>
+  <tr>
+    <td><b>長時間監控</b><br>讓電腦持續記錄家用網路、工作室、門市或遠端據點的斷線與延遲，不必一直守在畫面前。</td>
+    <td><b>雲端備份與通知</b><br>每天將 PDF、CSV 與測速資料備份至 Google Drive，並可用自己的 Gmail 接收日報與恢復通知。</td>
+    <td><b>分析與報修佐證</b><br>用圖形化歷史報表找出特定日期、時段與持續時間，方便自行排查或向網路業者說明問題。</td>
+  </tr>
+</table>
+
 ## NetCheck Viewer｜多台電腦集中分析
 
 NetCheck Viewer 是隨 NetCheckMonitor 提供的獨立 Windows 工具，適合家中、工作室、門市或不同地點有多台電腦的使用情境。每台電腦各自執行 NetCheckMonitor，將報表備份到同一個 Google Drive；中央電腦再用 Google Drive 電腦版同步資料夾，交由 Viewer 統一整理與分析。

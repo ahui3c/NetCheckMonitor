@@ -36,6 +36,44 @@ winget uninstall --id AHui3C.NetCheckMonitor --exact
 See the [WinGet release guide](docs/WINGET.md) for manifest maintenance and submission details.
 - The About page includes one-click online update. It downloads, verifies, replaces, and restarts to the latest public release automatically. When the program is under a protected folder such as `Program Files`, Windows asks once for UAC administrator permission after verification.
 
+## NetCheckMonitor screenshots
+
+### Live monitoring and backup status
+
+The home page shows current connectivity, check statistics, network-interface details, and recent results. The Google Drive status rail shows whether an account is connected, the daily PDF/CSV schedule, and whether scheduled speed-test data is included.
+
+<p align="center">
+  <img src="docs/images/netcheckmonitor-main.png" alt="NetCheckMonitor v0.9.20 live monitoring and Google Drive backup status" width="780">
+</p>
+
+| Google Drive daily backup | Multi-day detailed history report |
+| --- | --- |
+| <img src="docs/images/netcheckmonitor-google-drive.png" alt="NetCheckMonitor Google Drive daily backup settings" width="520"> | <img src="docs/images/netcheckmonitor-history-report.jpg" alt="NetCheckMonitor multi-day detailed history report" width="620"> |
+| Sign in to your own Google account and set the daily PDF/CSV backup time. Each computer is organized in its own subfolder. | Combine monitoring sessions to review availability, outage time, latency, daily status, and complete check records. |
+
+### Scheduled speed-test trends
+
+When optional scheduled speed testing is enabled, a separate report shows download, upload, latency, jitter, daily averages, and transferred data. Speed-test files can also be included in Google Drive backup and Gmail daily reports.
+
+<p align="center">
+  <img src="docs/images/netcheckmonitor-speed-report.jpg" alt="NetCheckMonitor scheduled speed-test trend report" width="1000">
+</p>
+
+## Typical use cases
+
+<table>
+  <tr>
+    <td width="33%"><img src="docs/images/netcheck-scenario-monitoring.jpg" alt="Long-running overnight network monitoring"></td>
+    <td width="33%"><img src="docs/images/netcheck-scenario-cloud.jpg" alt="Google Drive backup and Gmail notification workflow"></td>
+    <td width="33%"><img src="docs/images/netcheck-scenario-reports.jpg" alt="Network-quality report analysis and ISP evidence"></td>
+  </tr>
+  <tr>
+    <td><b>Long-running monitoring</b><br>Continuously record outages and latency for a home, studio, store, or remote site without watching the screen.</td>
+    <td><b>Cloud backup and notifications</b><br>Back up PDF, CSV, and speed-test data to Google Drive each day, and receive daily or recovery messages through your own Gmail account.</td>
+    <td><b>Analysis and ISP evidence</b><br>Use graphical history reports to identify dates, hours, and outage durations for troubleshooting or explaining the issue to an Internet provider.</td>
+  </tr>
+</table>
+
 ## NetCheck Viewer | Centralized multi-computer analysis
 
 NetCheck Viewer is a separate Windows companion included with NetCheckMonitor for homes, studios, stores, and other environments with multiple computers. Each computer runs NetCheckMonitor independently and backs up its reports to the same Google Drive account. A central computer synchronizes that folder through Google Drive for desktop, then Viewer organizes and analyzes all machines together.
