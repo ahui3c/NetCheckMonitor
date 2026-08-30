@@ -36,6 +36,38 @@ winget uninstall --id AHui3C.NetCheckMonitor --exact
 See the [WinGet release guide](docs/WINGET.md) for manifest maintenance and submission details.
 - The About page includes one-click online update. It downloads, verifies, replaces, and restarts to the latest public release automatically. When the program is under a protected folder such as `Program Files`, Windows asks once for UAC administrator permission after verification.
 
+## NetCheck Viewer | Centralized multi-computer analysis
+
+NetCheck Viewer is a separate Windows companion included with NetCheckMonitor for homes, studios, stores, and other environments with multiple computers. Each computer runs NetCheckMonitor independently and backs up its reports to the same Google Drive account. A central computer synchronizes that folder through Google Drive for desktop, then Viewer organizes and analyzes all machines together.
+
+Viewer is **not a live master/agent or remote-control system**. It never signs in to, connects directly to, or controls another computer. It reads backup data already synchronized to the local computer. Remote settings are limited to the monitoring interval and daily backup time, and take effect only after Google Drive synchronization and the monitor's next control check.
+
+<p align="center">
+  <img src="docs/images/netcheck-viewer-intro.png" alt="NetCheck Viewer first-run guidance and Google Drive data flow" width="900">
+</p>
+
+### What Viewer provides
+
+- See each computer's last backup, latest data timestamp, and current return state.
+- Analyze historical availability, outages, latency, scheduled speed tests, and backup delay.
+- Review 7/30/90-day trends, hourly outage hotspots, and overlaid comparisons across computers.
+- Use the **Needs Attention** center for overdue backups, low availability, repeated speed-test failures, pending settings, and CSV integrity problems.
+- Reparse only new or changed CSV files and refresh automatically when synchronized files arrive.
+- Use an allowlisted control file to asynchronously change a computer's monitoring interval and daily backup time.
+
+<p align="center">
+  <img src="docs/images/netcheck-viewer-dashboard.png" alt="NetCheck Viewer multi-computer monitoring dashboard" width="1100">
+</p>
+
+### Start using Viewer
+
+1. Sign in to the same Google account on every monitored computer and enable NetCheckMonitor daily Google Drive backup.
+2. Install Google Drive for desktop on the central computer and synchronize the `Net_Check` folder containing each computer's subfolder.
+3. [Download the portable NetCheck Viewer](https://github.com/ahui3c/NetCheckMonitor/releases/latest/download/NetCheck_Viewer-Portable.zip), extract it, and run `NetCheck_Viewer.exe`.
+4. Select the locally synchronized `Net_Check` folder to begin centralized analysis.
+
+See the [NetCheck Viewer guide](NetCheck_Viewer/README.md) for complete features, data formats, and limitations.
+
 ## Features
 
 - Tests Microsoft, Google, and Cloudflare HTTPS endpoints every 60 seconds by default.

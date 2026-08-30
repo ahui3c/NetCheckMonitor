@@ -35,6 +35,38 @@ winget uninstall --id AHui3C.NetCheckMonitor --exact
 
 發行與 manifest 維護方式請參閱 [WinGet 發行文件](docs/WINGET.md)。
 
+## NetCheck Viewer｜多台電腦集中分析
+
+NetCheck Viewer 是隨 NetCheckMonitor 提供的獨立 Windows 工具，適合家中、工作室、門市或不同地點有多台電腦的使用情境。每台電腦各自執行 NetCheckMonitor，將報表備份到同一個 Google Drive；中央電腦再用 Google Drive 電腦版同步資料夾，交由 Viewer 統一整理與分析。
+
+Viewer **不是即時主從或遠端遙控系統**，不會直接登入、連線或控制其他電腦。它只讀取已同步到本機的備份資料；遠端設定也只允許調整監控間隔與每日備份時間，實際套用時間取決於 Google Drive 同步與監控程式下一次檢查。
+
+<p align="center">
+  <img src="docs/images/netcheck-viewer-intro.png" alt="NetCheck Viewer 第一次使用說明與 Google Drive 資料流程" width="900">
+</p>
+
+### Viewer 可以做什麼
+
+- 集中檢視每台電腦的最後備份時間、最後資料時間與目前狀態。
+- 分析歷史連線率、斷線事件、延遲、定時測速與備份回傳延遲。
+- 提供 7／30／90 天趨勢、每小時斷線熱點及多台電腦疊加比較。
+- 「需要處理」集中列出備份逾期、低連線率、連續測速失敗、設定等待套用與 CSV 完整性異常。
+- 只解析新增或變更的 CSV，並監看同步資料夾自動重新整理。
+- 透過白名單控制檔，非同步調整指定電腦的監控間隔與每日備份時間。
+
+<p align="center">
+  <img src="docs/images/netcheck-viewer-dashboard.png" alt="NetCheck Viewer 多電腦監控分析主畫面" width="1100">
+</p>
+
+### 開始使用 Viewer
+
+1. 在每台受監控電腦登入同一個 Google 帳號，並開啟 NetCheckMonitor 的 Google Drive 每日備份。
+2. 在中央電腦安裝 Google Drive 電腦版，同步包含各電腦子資料夾的 `Net_Check` 資料夾。
+3. [下載 NetCheck Viewer 可攜版](https://github.com/ahui3c/NetCheckMonitor/releases/latest/download/NetCheck_Viewer-Portable.zip)，解壓縮後執行 `NetCheck_Viewer.exe`。
+4. 選取同步到本機的 `Net_Check` 資料夾，即可開始集中分析。
+
+完整功能、資料格式與限制請參閱 [NetCheck Viewer 使用說明](NetCheck_Viewer/README.md)。
+
 ## 主要功能
 
 - 預設每 60 秒依序測試 Microsoft、Google 與 Cloudflare HTTPS 端點。
